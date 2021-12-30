@@ -11,6 +11,7 @@ from models import CNN
 from params import *
 from optim import *
 from train_util import *
+from util import *
 
 
 def get_scaled_up_grads(glob_net, networks, self=None, iter=-1):
@@ -84,7 +85,11 @@ class CustomFL:
         self.debug_log={}
         self.debug_log['cluster']=[]
         self.debug_log['cluster_without_running_avg']=[]
+        self.debug_log['cluster_mal']=[]
+        self.debug_log['cluster_mal_wra']=[]
+        self.debug_log['cluster_labels']=[]
         self.debug_log['coses']=[]
+        self.debug_log['target_label_acc']=[]
         n_nets=num_of_benign_nets+num_of_mal_nets
         self.cos_matrices=[]
         #self.cos_matrix.append(np.zeros((n_nets, n_nets)))
@@ -99,14 +104,34 @@ class CustomFL:
         X= np.array(X)
         clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
         from sklearn.metrics.cluster import adjusted_rand_score
-        print('Original Copylist', copylist)
-        print('Found clusters', clustering.labels_)
-        print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
-        print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+        # print('Original Copylist', copylist)
+        # print('Found clusters', clustering.labels_)
+
+
+
+        #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
+        #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
         print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
         self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
         self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
         self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
+
+        correct_c=0
+        wrong_c=0
+        for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
+            mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
+            mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
+            # print(mals_benign_brothers, mals_benign_brothers_clusters)
+            benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
+
+            if clustering.labels_[mal]==benign_group_num:
+                correct_c += 1
+            else:
+                wrong_c += 1
+
+        print('correct_c ', correct_c, 'wrong_c ', wrong_c)
+        self.debug_log['cluster_mal_wra'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
+
         
         coses=[]
         
@@ -133,16 +158,31 @@ class CustomFL:
             
         cos_matrix = cos_matrix/num_of_coses
                     
-        print(cos_matrix)
+        #print(cos_matrix)
         
         clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='precomputed', linkage='complete').fit(1-cos_matrix)
-        print('Original Copylist', copylist)
-        print('Found clusters', clustering.labels_)
-        print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
-        print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
-        print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
+        # print('Original Copylist', copylist)
+        # print('Found clusters', clustering.labels_)
+        # print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
+        # print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+        print('\n\nClustering score with running avg', adjusted_rand_score(clustering.labels_.tolist(), copylist))
         self.debug_log['cluster'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
+        self.debug_log['cluster_labels'].append((iter, 'cluster_grads', 'Original cluster labels', copylist, 'Found cluster labels', clustering.labels_))
         
+
+        correct_c=0
+        wrong_c=0
+        for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
+            mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
+            mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
+            # print(mals_benign_brothers, mals_benign_brothers_clusters)
+            benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
+            if clustering.labels_[mal]==benign_group_num:
+                correct_c += 1
+            else:
+                wrong_c += 1
+        print('correct_c ', correct_c, 'wrong_c ', wrong_c)
+        self.debug_log['cluster_mal_wra'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
         
         '''
         X = [np.array(net.grad_params) for net in self.benign_nets]
@@ -181,7 +221,7 @@ class CustomFL:
             grads.append(self.mal_nets[i].grad_params)
         
         norms = [torch.linalg.norm(grad) for grad in grads]
-        print('Norms of local gradients ', norms)
+        #print('Norms of local gradients ', norms)
         self.log.append((iter, 'Norms of local gradients ', 'FLTrust', norms))
 
         
@@ -191,18 +231,18 @@ class CustomFL:
         for grad in grads:
             cos_sims.append(torch.dot(grad, clean_server_grad)/ (torch.linalg.norm(grad)+ 1e-9) / (torch.linalg.norm(clean_server_grad)+ 1e-9))
         '''
-        print('\n Aggregating models')
+        #print('\n Aggregating models')
 
         #print([cos_calc() ])
 
-        print('Cosine Similarities: ', cos_sims)
+        #print('Cosine Similarities: ', cos_sims)
         self.log.append((iter, 'Cosine Similarities', 'FLtrust', cos_sims))
         cos_sims = np.maximum(np.array(cos_sims), 0)
         norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
         for i in range(len(norm_weights)):
             norm_weights[i] = norm_weights[i] * torch.linalg.norm(clean_server_grad) / (torch.linalg.norm(grads[i]))
         
-        print('Aggregation Weights: ', norm_weights)
+        #print('Aggregation Weights: ', norm_weights)
         self.log.append((iter, 'Aggregation Weights', 'FLtrust', norm_weights))
 
         self.global_net.aggregate([grad.state_dict() for grad in nets_grads], aggr_weights=norm_weights)
@@ -237,11 +277,12 @@ class CustomFL:
             train_net(network, optim, trainloader, epoch, poisonNow=poisonNow, attack_type=self.attack_type)
         network.calc_grad(self.global_net.state_dict(), change_self=False)
         if poisonNow:
-            acc=test(network)
-            self.log.append((iter, 'Local net test accuracy: mal', 'train_local_net', acc))
-            if self.attack_type=='backdoorq':
-                acc = backdoor_test(network)
-                self.log.append((iter, 'Local net backdoor test accuracy: mal', 'train_local_net', acc))
+            test_label_flip(network)
+        #     acc=test(network)
+        #     self.log.append((iter, 'Local net test accuracy: mal', 'train_local_net', acc))
+        #     if self.attack_type=='backdoorq':
+        #         acc = backdoor_test(network)
+        #         self.log.append((iter, 'Local net backdoor test accuracy: mal', 'train_local_net', acc))
 
     def train(self, tqdm_disable=False):
         for iter in range(self.n_iter):
@@ -254,10 +295,6 @@ class CustomFL:
             for i in tqdm(range(self.num_of_benign_nets), disable=tqdm_disable):
                 self.train_local_net(False, i, iter)
 
-
-            coses = self.cluster_grads(iter)
-
-            self.debug_log['coses'].append((iter, coses))
 
             benign_aggr_net=CNN().to(device)
             benign_aggr_net.set_param_to_zero()
@@ -272,7 +309,7 @@ class CustomFL:
             benign_aggr_net_grad.aggregate([self.global_net.state_dict()], aggr_weights=[-1])
 
             
-            for i in range(self.num_of_mal_nets):
+            for i in tqdm(range(self.num_of_mal_nets), disable=True):
                 self.train_local_net(True, i, iter, ref_net_for_minimizing_dist=(benign_aggr_net_grad, benign_aggr_net))
                 
                 if self.scale_up:
@@ -281,17 +318,21 @@ class CustomFL:
                     #self.mal_nets[i].aggregate([benign_aggr_net.state_dict()])
                 
 
+            coses = self.cluster_grads(iter)
+
+            self.debug_log['coses'].append((iter, coses))
+
             cosList=[cos_calc_btn_grads(net.grad_params, self.benign_nets[-1].grad_params) for net in networks]
             distanceList=[calcDiff(net, self.benign_nets[-1]) for net in networks]
 
             #self.cluster_grads()
 
             self.log.append((iter, 'Benign net distance', 'train', distanceList[:self.num_of_benign_nets]))
-            print('Benign net distance', distanceList[:self.num_of_benign_nets])
+            #print('Benign net distance', distanceList[:self.num_of_benign_nets])
             self.log.append((iter, 'Malicious net distance', 'train', distanceList[self.num_of_benign_nets:]))
-            print('Malicious net distance', distanceList[self.num_of_benign_nets:])
+            #print('Malicious net distance', distanceList[self.num_of_benign_nets:])
             self.log.append((iter, 'Cos sim list', 'train', cosList))
-            print('cos_sim list ', cosList)
+            #print('cos_sim list ', cosList)
 
             # aggregate nets
             #self.global_net.set_param_to_zero()
@@ -300,8 +341,11 @@ class CustomFL:
             print('\n\n\nAggregate test at iter ', iter)
             acc=test(self.global_net)
             self.log.append((iter, 'Test accuracy: agg net', 'train', acc))
+
+            acc=test_label_flip(self.global_net)
+            self.debug_log['target_label_acc'].append((iter, 'Target label accuracy: agg net', 'train', acc))
             #backdoor_test(self.global_net)
-            self.log.append((iter, 'Backdoor test accuracy: agg net', 'train', acc))
+            #self.log.append((iter, 'Backdoor test accuracy: agg net', 'train', acc))
             self.log.append((iter, 'Distance between aggregate global and clean server', 'train', calcDiff(self.global_net, self.benign_nets[-1])))
 
             # set all local nets equal to global net at the end of the iteration

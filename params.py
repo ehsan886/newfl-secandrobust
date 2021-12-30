@@ -26,30 +26,32 @@ log_interval = 10
 
 ### important hyperparameters
 num_of_workers=101
-num_of_mal_workers=0
+num_of_mal_workers=18
 n_iter=50
-n_epochs=2
-poison_starts_at_iter=n_iter
+n_epochs=1
+poison_starts_at_iter=0
 inertia=0.1
 momentum=0.1
 attack_type='label_flip'
 scale_up=False
 minimizeDist=False
 
+target_class=0
+
 iid = False
 num_of_distributions = int(num_of_workers/10)+1
-num_of_workers_in_distribs = num_of_workers * np.random.dirichlet(np.array(num_of_distributions * [3.0]))
-num_of_workers_in_distribs = [int(val) for val in num_of_workers_in_distribs]
-while 0 in num_of_workers_in_distribs:
-    num_of_workers_in_distribs.remove(0)
-num_of_workers_in_distribs.append(num_of_workers-sum(num_of_workers_in_distribs))
-print(num_of_workers_in_distribs, sum(num_of_workers_in_distribs))
-num_of_distributions = len(num_of_workers_in_distribs)
-copylist = []
-for i in range(len(num_of_workers_in_distribs)):
-    copylist += num_of_workers_in_distribs[i]*[i]
-random.shuffle(copylist)
-print(copylist)
+# num_of_workers_in_distribs = num_of_workers * np.random.dirichlet(np.array(num_of_distributions * [3.0]))
+# num_of_workers_in_distribs = [int(val) for val in num_of_workers_in_distribs]
+# while 0 in num_of_workers_in_distribs:
+#     num_of_workers_in_distribs.remove(0)
+# num_of_workers_in_distribs.append(num_of_workers-sum(num_of_workers_in_distribs))
+# print(num_of_workers_in_distribs, sum(num_of_workers_in_distribs))
+# num_of_distributions = len(num_of_workers_in_distribs)
+# copylist = []
+# for i in range(len(num_of_workers_in_distribs)):
+#     copylist += num_of_workers_in_distribs[i]*[i]
+# random.shuffle(copylist)
+# print(copylist)
 
 label_skew_ratios=[]
 
@@ -273,23 +275,51 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
     
 sd, sl, ewd, ewl = assign_data(train_dataset, 0.5, None)
 
-if iid:
-    train_loaders=[]
-    for i in range(n_iter):
-        train_loaders.append([(i, pos, get_train_iid(all_range, pos, i))
-                                for pos in range(num_of_workers)])
-else:
-    indices_per_participant = sample_dirichlet_train_data(
-        num_of_workers,
-        #dataset= torch.utils.data.Subset(train_dataset, list(range(240))),
-        alpha=0.95,
-        copylist=copylist)
-    train_loaders = [(-1, pos, get_train_noniid(indices)) for pos, indices in
-                    indices_per_participant.items()]
-    train_loaders = n_iter * [train_loaders]
+ewd.append(sd)
+ewl.append(sl)
 
 
+# if iid:
+#     train_loaders=[]
+#     for i in range(n_iter):
+#         train_loaders.append([(i, pos, get_train_iid(all_range, pos, i))
+#                                 for pos in range(num_of_workers)])
+# else:
+#     indices_per_participant = sample_dirichlet_train_data(
+#         num_of_workers,
+#         #dataset= torch.utils.data.Subset(train_dataset, list(range(240))),
+#         alpha=0.95,
+#         copylist=copylist)
+#     train_loaders = [(-1, pos, get_train_noniid(indices)) for pos, indices in
+#                     indices_per_participant.items()]
+#     train_loaders = n_iter * [train_loaders]
 
+copylist=[int(np.floor(i/((num_of_workers-1)/10))) for i in range(num_of_workers-1)]
+copylist.append(copylist[-1]+1)
+
+mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
+mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
+
+for index in mal_indices:
+	ew_d = ewd[index]
+	ew_l = ewl[index]
+	ew_c = copylist[index]
+	del ewd[index]
+	del ewl[index]
+	del copylist[index]
+	ewd.append(ew_d)
+	ewl.append(ew_l)
+	copylist.append(ew_c)
+
+print('copylist ', copylist)
+
+from scipy import stats
+
+for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
+	mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
+	mals_benign_brothers_clusters = [copylist[(iid+1)%len(copylist)] for iid in mals_benign_brothers[0]]
+	print(mals_benign_brothers, mals_benign_brothers_clusters)
+	print(stats.mode(mals_benign_brothers_clusters)[0])
 
 
 
@@ -301,15 +331,15 @@ for id_worker in range(len(ewd)):
     train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=batch_size_train, shuffle=True)
     train_loaders.append((-1, id_worker, train_loader))
     
-dataset_server=[]
-for idx in range(len(sd)):
-    dataset_server.append((sd[idx], sl[idx]))
-train_loader = torch.utils.data.DataLoader(dataset_server, batch_size=batch_size_train, shuffle=True)
-train_loaders.append((-1, id_worker+1, train_loader))
 
 #train_loaders = [(-1, idx, torch.utils.data.DataLoader(ew, batch_size=batch_size_train, shuffle=True)) for idx, ew in enumerate(ewd)]
 train_loaders = n_iter * [train_loaders]
 
-copylist=[int(np.floor(i/((num_of_workers-1)/10))) for i in range(num_of_workers-1)]
-copylist.append(copylist[-1]+1)
-print(copylist)
+target_class_test_data=[]
+for _, (x, y) in enumerate(test_dataset):
+	if y==target_class:
+		target_class_test_data.append((x, y))
+
+print(len(target_class_test_data))
+
+target_class_test_loader = torch.utils.data.DataLoader(target_class_test_data, batch_size=batch_size_test, shuffle=True)

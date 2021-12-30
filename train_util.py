@@ -48,7 +48,7 @@ def train(network, optimizer, epoch):
 def train_net(network, optimizer, trainloader, epoch, poisonNow=False, print_flag=False, tqdm_disable=True, attack_type='backdoor'):
     for batch_idx, (data, target) in enumerate(tqdm(trainloader, disable=tqdm_disable)):
         if poisonNow:
-            data, target, poison_num = get_poison_batch((data, target), attack_type=attack_type)
+            data, target, poison_num = get_poison_batch_special_label_flip((data, target))
         else:
             data, target = get_batch((data, target))
         optimizer.zero_grad()
@@ -86,12 +86,35 @@ def test(network):
 	return 100. * correct / len(test_loader.dataset)
 
 
-def backdoor_test(network):
+
+
+
+def test_label_flip(network):
 	network.eval()
 	test_loss = 0
 	correct = 0
 	with torch.no_grad():
-		for data, target in tqdm(test_loader):
+		for data, target in tqdm(target_class_test_loader):
+		    data, target = get_batch((data, target))
+		    output = network(data)
+		    loss_func=nn.CrossEntropyLoss()
+		    test_loss += loss_func(output, target).item()
+		    pred = output.data.max(1, keepdim=True)[1]
+		    correct += pred.eq(target.data.view_as(pred)).sum()
+	test_loss /= len(target_class_test_loader.dataset)
+	test_losses.append(test_loss)
+	print('\nTarget Class Test set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+	test_loss, correct, len(target_class_test_loader.dataset),
+	100. * correct / len(target_class_test_loader.dataset)))
+	return 100. * correct / len(target_class_test_loader.dataset)
+
+
+def backdoor_test(network, tqdm_disable=True):
+	network.eval()
+	test_loss = 0
+	correct = 0
+	with torch.no_grad():
+		for data, target in tqdm(test_loader, disable=tqdm_disable):
 			data, target, poison_num = get_poison_batch((data, target), evaluation=True, attack_type='backdoor')
 			output = network(data)
 			loss_func=nn.CrossEntropyLoss()

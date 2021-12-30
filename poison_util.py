@@ -90,6 +90,29 @@ def get_poison_batch(bptt,adversarial_index=-1, evaluation=False, attack_type='l
             new_images.requires_grad_(False)
             new_targets.requires_grad_(False)
         return new_images,new_targets,poison_count
+
+
+def get_poison_batch_special_label_flip(bptt, num_of_classes=10, target_class=0):
+    images, targets = bptt
+
+    poison_count= 0
+    new_images=images
+    new_targets=targets
+
+    for index in range(0, len(images)):
+        if targets[index]==target_class: # poison all data when testing
+            new_targets[index] = num_of_classes-target_class-1
+            new_images[index] = images[index]
+            poison_count+=1
+
+        else: 
+            new_images[index] = images[index]
+            new_targets[index]= targets[index]
+
+    new_images = new_images.to(device)
+    new_targets = new_targets.to(device).long()
+
+    return new_images,new_targets,poison_count
         
 
 def get_batch(bptt, evaluation=False):

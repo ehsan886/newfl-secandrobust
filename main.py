@@ -6,6 +6,8 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 import numpy as np
 
+import pickle
+
 from CustomFL import CustomFL
 
 from params import *
@@ -16,3 +18,8 @@ if __name__ == '__main__':
 	              attack_type=attack_type, scale_up=scale_up, minimizeDist=minimizeDist
 	)
 	fl.train()
+
+	with open(f'output_file_dec30_mal_{num_of_mal_workers}_all_{num_of_workers}_iters_{n_iter}_epochs_{n_epochs}.txt', 'wb') as f:
+		pickle.dump(fl.debug_log, f)
+
+	f.close()
