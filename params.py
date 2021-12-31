@@ -323,9 +323,12 @@ args = parser.parse_args()
 
 aa0 = int(args.aa0)
 
-mal_indices_0=np.random.randint(0, 9, size=aa0).tolist()
-mal_indices_others=np.random.randint(10, 99, size=20-aa0).tolist()
-mal_indices = np.sort(np.array(mal_indices_0 + mal_indices_others))
+group_0_list=np.arange(10)
+np.random.shuffle(group_0_list)
+other_group_list=np.arange(10, 99)
+np.random.shuffle(other_group_list)
+# print(group_0_list[:aa0])
+mal_indices = np.sort(np.array(group_0_list[:aa0].tolist() + other_group_list[:20-aa0].tolist()))
 print(mal_indices)
 
 for index in mal_indices:
@@ -344,13 +347,13 @@ for id in range(len(mal_indices)):
 
 print('copylist ', copylist)
 
-from scipy import stats
+# from scipy import stats
 
-for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
-	mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
-	mals_benign_brothers_clusters = [copylist[(iid+1)%len(copylist)] for iid in mals_benign_brothers[0]]
-	print(mals_benign_brothers, mals_benign_brothers_clusters)
-	print(stats.mode(mals_benign_brothers_clusters)[0])
+# for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
+# 	mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
+# 	mals_benign_brothers_clusters = [copylist[(iid+1)%len(copylist)] for iid in mals_benign_brothers[0]]
+# 	print(mals_benign_brothers, mals_benign_brothers_clusters)
+# 	print(stats.mode(mals_benign_brothers_clusters)[0])
 
 
 

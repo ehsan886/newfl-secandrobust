@@ -6,6 +6,8 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 import numpy as np
 
+from scipy import stats
+
 from models import CNN
 
 from params import *
