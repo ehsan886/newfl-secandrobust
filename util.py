@@ -46,3 +46,4 @@ def inv_grad_test(model):
 
 def calcDiff(network, network2):
     return sum((x - y).abs().sum() for x, y in zip(network.state_dict().values(), network2.state_dict().values()))
+

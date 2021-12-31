@@ -8,6 +8,8 @@ import numpy as np
 
 from collections import defaultdict
 
+import argparse
+
 poison_dict = dict()
 poison_dict['poison_delta'] = 0.1
 poison_dict['poison_pattern'] = [[23,25], [24,24],[25,23],[25,25]]
@@ -27,7 +29,7 @@ log_interval = 10
 ### important hyperparameters
 num_of_workers=101
 num_of_mal_workers=18
-n_iter=50
+n_iter=1
 n_epochs=1
 poison_starts_at_iter=0
 inertia=0.1
@@ -194,6 +196,20 @@ def sample_dirichlet_train_data(no_participants=num_of_workers, dataset=train_da
 
     return per_participant_list
 
+def get_label_skew_ratios(dataset, num_of_classes=10):
+    dataset_classes = {}
+    for ind, x in enumerate(dataset):
+        _, label = x
+        #if ind in self.params['poison_images'] or ind in self.params['poison_images_test']:
+        #    continue
+        if label in dataset_classes:
+            dataset_classes[label] += 1
+        else:
+            dataset_classes[label] = 1
+    for key in dataset_classes.keys():
+    	dataset_classes[key] = dataset_classes[key]/len(dataset)
+    return dataset_classes
+
 def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.1, dataset="FashionMNIST", seed=1):
     # assign data to the clients
     other_group_size = (1 - bias) / (num_labels - 1)
@@ -297,19 +313,34 @@ ewl.append(sl)
 copylist=[int(np.floor(i/((num_of_workers-1)/10))) for i in range(num_of_workers-1)]
 copylist.append(copylist[-1]+1)
 
-mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
-mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
+# mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
+# mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--attacker_at_0', dest='aa0', default=0)
+
+args = parser.parse_args()
+
+aa0 = int(args.aa0)
+
+mal_indices_0=np.random.randint(0, 9, size=aa0).tolist()
+mal_indices_others=np.random.randint(10, 99, size=20-aa0).tolist()
+mal_indices = np.sort(np.array(mal_indices_0 + mal_indices_others))
+print(mal_indices)
 
 for index in mal_indices:
 	ew_d = ewd[index]
 	ew_l = ewl[index]
 	ew_c = copylist[index]
-	del ewd[index]
-	del ewl[index]
-	del copylist[index]
 	ewd.append(ew_d)
 	ewl.append(ew_l)
 	copylist.append(ew_c)
+
+for id in range(len(mal_indices)):
+	index = mal_indices[len(mal_indices)-id-1]
+	del ewd[index]
+	del ewl[index]
+	del copylist[index]
 
 print('copylist ', copylist)
 

@@ -17,9 +17,14 @@ if __name__ == '__main__':
 	              inertia=inertia, momentum=momentum,
 	              attack_type=attack_type, scale_up=scale_up, minimizeDist=minimizeDist
 	)
+
+	for id in range(len(train_loaders[0])):
+		(_, _, train_loader) = train_loaders[0][id]
+		fl.debug_log['label_skew_ratio'].append((id, get_label_skew_ratios(train_loader.dataset)))
+	
 	fl.train()
 
-	with open(f'output_file_dec30_mal_{num_of_mal_workers}_all_{num_of_workers}_iters_{n_iter}_epochs_{n_epochs}.txt', 'wb') as f:
+	with open(f'output_file_dec30_mal_{num_of_mal_workers}_aa0_{aa0}_all_{num_of_workers}_iters_{n_iter}_epochs_{n_epochs}.txt', 'wb') as f:
 		pickle.dump(fl.debug_log, f)
 
 	f.close()

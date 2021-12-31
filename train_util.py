@@ -89,7 +89,7 @@ def test(network):
 
 
 
-def test_label_flip(network):
+def test_label_flip(network, print_flag=False):
 	network.eval()
 	test_loss = 0
 	correct = 0
@@ -103,9 +103,10 @@ def test_label_flip(network):
 		    correct += pred.eq(target.data.view_as(pred)).sum()
 	test_loss /= len(target_class_test_loader.dataset)
 	test_losses.append(test_loss)
-	print('\nTarget Class Test set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-	test_loss, correct, len(target_class_test_loader.dataset),
-	100. * correct / len(target_class_test_loader.dataset)))
+	if print_flag:
+		print('\nTarget Class Test set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+		test_loss, correct, len(target_class_test_loader.dataset),
+		100. * correct / len(target_class_test_loader.dataset)))
 	return 100. * correct / len(target_class_test_loader.dataset)
 
 

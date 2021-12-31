@@ -90,6 +90,9 @@ class CustomFL:
         self.debug_log['cluster_labels']=[]
         self.debug_log['coses']=[]
         self.debug_log['target_label_acc']=[]
+        self.debug_log['cos_sim']=[]
+        self.debug_log['aggr_weights']=[]
+        self.debug_log['label_skew_ratio']=[]
         n_nets=num_of_benign_nets+num_of_mal_nets
         self.cos_matrices=[]
         #self.cos_matrix.append(np.zeros((n_nets, n_nets)))
@@ -237,6 +240,7 @@ class CustomFL:
 
         #print('Cosine Similarities: ', cos_sims)
         self.log.append((iter, 'Cosine Similarities', 'FLtrust', cos_sims))
+        self.debug_log['cos_sim'].append((iter, 'Cosine Similarities', 'FLtrust', cos_sims))
         cos_sims = np.maximum(np.array(cos_sims), 0)
         norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
         for i in range(len(norm_weights)):
@@ -244,6 +248,7 @@ class CustomFL:
         
         #print('Aggregation Weights: ', norm_weights)
         self.log.append((iter, 'Aggregation Weights', 'FLtrust', norm_weights))
+        self.debug_log['aggr_weights'].append((iter, 'Aggregation Weights', 'FLtrust', norm_weights))
 
         self.global_net.aggregate([grad.state_dict() for grad in nets_grads], aggr_weights=norm_weights)
             
@@ -342,7 +347,7 @@ class CustomFL:
             acc=test(self.global_net)
             self.log.append((iter, 'Test accuracy: agg net', 'train', acc))
 
-            acc=test_label_flip(self.global_net)
+            acc=test_label_flip(self.global_net, print_flag=True)
             self.debug_log['target_label_acc'].append((iter, 'Target label accuracy: agg net', 'train', acc))
             #backdoor_test(self.global_net)
             #self.log.append((iter, 'Backdoor test accuracy: agg net', 'train', acc))
