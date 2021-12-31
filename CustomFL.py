@@ -121,8 +121,8 @@ class CustomFL:
         self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
         self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
 
-        correct_c=0
-        wrong_c=0
+        correct_c=[]
+        wrong_c=[]
         for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
             mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
             mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
@@ -130,11 +130,12 @@ class CustomFL:
             benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
 
             if clustering.labels_[mal]==benign_group_num:
-                correct_c += 1
+                correct_c.append(copylist[mal])
             else:
-                wrong_c += 1
+                wrong_c.append(copylist[mal])
 
-        print('correct_c ', correct_c, 'wrong_c ', wrong_c)
+        print('correct_c ', len(correct_c), correct_c)
+        print('wrong_c ', len(wrong_c), wrong_c)
         self.debug_log['cluster_mal_wra'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
 
         
@@ -175,19 +176,22 @@ class CustomFL:
         self.debug_log['cluster_labels'].append((iter, 'cluster_grads', 'Original cluster labels', copylist, 'Found cluster labels', clustering.labels_))
         
 
-        correct_c=0
-        wrong_c=0
+        correct_c=[]
+        wrong_c=[]
         for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
             mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
             mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
             # print(mals_benign_brothers, mals_benign_brothers_clusters)
             benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
+
             if clustering.labels_[mal]==benign_group_num:
-                correct_c += 1
+                correct_c.append(copylist[mal])
             else:
-                wrong_c += 1
-        print('correct_c ', correct_c, 'wrong_c ', wrong_c)
-        self.debug_log['cluster_mal_wra'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
+                wrong_c.append(copylist[mal])
+
+        print('correct_c ', len(correct_c), correct_c)
+        print('wrong_c ', len(wrong_c), wrong_c)
+        self.debug_log['cluster_mal'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
         
         '''
         X = [np.array(net.grad_params) for net in self.benign_nets]

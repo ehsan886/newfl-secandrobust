@@ -89,12 +89,12 @@ def test(network):
 
 
 
-def test_label_flip(network, print_flag=False):
+def test_label_flip(network, print_flag=False, tqdm_disable=True):
 	network.eval()
 	test_loss = 0
 	correct = 0
 	with torch.no_grad():
-		for data, target in tqdm(target_class_test_loader):
+		for data, target in tqdm(target_class_test_loader, disable=tqdm_disable):
 		    data, target = get_batch((data, target))
 		    output = network(data)
 		    loss_func=nn.CrossEntropyLoss()

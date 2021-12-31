@@ -28,7 +28,7 @@ log_interval = 10
 
 ### important hyperparameters
 num_of_workers=101
-num_of_mal_workers=18
+num_of_mal_workers=20
 n_iter=1
 n_epochs=1
 poison_starts_at_iter=0
