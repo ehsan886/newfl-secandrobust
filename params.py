@@ -29,7 +29,7 @@ log_interval = 10
 ### important hyperparameters
 num_of_workers=101
 num_of_mal_workers=20
-n_iter=1
+n_iter=30
 n_epochs=1
 poison_starts_at_iter=0
 inertia=0.1
@@ -207,10 +207,11 @@ def get_label_skew_ratios(dataset, num_of_classes=10):
         else:
             dataset_classes[label] = 1
     for key in dataset_classes.keys():
-    	dataset_classes[key] = dataset_classes[key]/len(dataset)
+    	# dataset_classes[key] = dataset_classes[key]/len(dataset)
+        dataset_classes[key] = dataset_classes[key]
     return dataset_classes
 
-def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.1, dataset="FashionMNIST", seed=1):
+def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.2, dataset="FashionMNIST", seed=1):
     # assign data to the clients
     other_group_size = (1 - bias) / (num_labels - 1)
     worker_per_group = num_workers / num_labels
@@ -239,6 +240,7 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
             sum_res -= 1
     samp_dis[num_labels - 1] = server_pc - np.sum(samp_dis[:num_labels - 1])
 
+    
     # randomly assign the data points based on the labels
     server_counter = [0 for _ in range(num_labels)]
     for _, (x, y) in enumerate(train_data):
@@ -252,16 +254,27 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
 
         upper_bound = y * (1. - bias) / (num_labels - 1) + bias
         lower_bound = y * (1. - bias) / (num_labels - 1)
+
+        # experiment 2 only
+        upper_bound_offset = 0.4 if y==0 else 0
+
+        # print(y, upper_bound, lower_bound)
+
         rd = np.random.random_sample()
 
-        if rd > upper_bound:
+
+        if rd > upper_bound + upper_bound_offset:
             worker_group = int(np.floor((rd - upper_bound) / other_group_size) + y + 1)
         elif rd < lower_bound:
             worker_group = int(np.floor(rd / other_group_size))
+        # experiment 2 only
+        elif rd > upper_bound:
+            continue
         else:
             worker_group = y
+        # print(y, worker_group)
 
-        
+
         if server_counter[int(y)] < samp_dis[int(y)]:
             server_data.append(x)
             server_label.append(y)

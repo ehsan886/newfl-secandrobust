@@ -91,7 +91,8 @@ class CustomFL:
         self.debug_log['cluster_mal_wra']=[]
         self.debug_log['cluster_labels']=[]
         self.debug_log['coses']=[]
-        self.debug_log['target_label_acc']=[]
+        self.debug_log['main_acc']=[]
+        self.debug_log['recall']=[]
         self.debug_log['cos_sim']=[]
         self.debug_log['aggr_weights']=[]
         self.debug_log['label_skew_ratio']=[]
@@ -351,10 +352,10 @@ class CustomFL:
             self.FLtrust(iter=iter)
             print('\n\n\nAggregate test at iter ', iter)
             acc=test(self.global_net)
-            self.log.append((iter, 'Test accuracy: agg net', 'train', acc))
+            self.debug_log['main_acc'].append((iter, 'Test accuracy: agg net', 'train', acc))
 
             acc=test_label_flip(self.global_net, print_flag=True)
-            self.debug_log['target_label_acc'].append((iter, 'Target label accuracy: agg net', 'train', acc))
+            self.debug_log['recall'].append((iter, 'Target label accuracy: agg net', 'train', acc))
             #backdoor_test(self.global_net)
             #self.log.append((iter, 'Backdoor test accuracy: agg net', 'train', acc))
             self.log.append((iter, 'Distance between aggregate global and clean server', 'train', calcDiff(self.global_net, self.benign_nets[-1])))
