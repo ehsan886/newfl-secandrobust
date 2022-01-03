@@ -304,11 +304,6 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
     
     
     return server_data, server_label, each_worker_data, each_worker_label
-    
-sd, sl, ewd, ewl = assign_data(train_dataset, 0.5, None)
-
-ewd.append(sd)
-ewl.append(sl)
 
 
 # if iid:
@@ -334,10 +329,17 @@ copylist.append(copylist[-1]+1)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--attacker_at_0', dest='aa0', default=0)
+parser.add_argument('--server_pct', dest='server_pct', default=0.1)
 
 args = parser.parse_args()
 
 aa0 = int(args.aa0)
+server_pct = float(args.server_pct)
+
+sd, sl, ewd, ewl = assign_data(train_dataset, 0.5, None, p=server_pct)
+
+ewd.append(sd)
+ewl.append(sl)
 
 group_0_list=np.arange(10)
 np.random.shuffle(group_0_list)
