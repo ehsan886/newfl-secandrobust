@@ -28,7 +28,7 @@ log_interval = 10
 
 ### important hyperparameters
 num_of_workers=101
-num_of_mal_workers=20
+num_of_mal_workers=50
 n_iter=30
 n_epochs=1
 poison_starts_at_iter=0
@@ -341,7 +341,7 @@ np.random.shuffle(group_0_list)
 other_group_list=np.arange(10, 99)
 np.random.shuffle(other_group_list)
 # print(group_0_list[:aa0])
-mal_indices = np.sort(np.array(group_0_list[:aa0].tolist() + other_group_list[:20-aa0].tolist()))
+mal_indices = np.sort(np.array(group_0_list[:aa0].tolist() + other_group_list[:num_of_mal_workers-aa0].tolist()))
 print(mal_indices)
 
 for index in mal_indices:
