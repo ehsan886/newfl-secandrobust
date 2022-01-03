@@ -211,7 +211,7 @@ def get_label_skew_ratios(dataset, num_of_classes=10):
         dataset_classes[key] = dataset_classes[key]
     return dataset_classes
 
-def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.2, dataset="FashionMNIST", seed=1):
+def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1):
     # assign data to the clients
     other_group_size = (1 - bias) / (num_labels - 1)
     worker_per_group = num_workers / num_labels
@@ -226,12 +226,12 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
     real_dis = [1. / num_labels for _ in range(num_labels)]
     samp_dis = [0 for _ in range(num_labels)]
     num1 = int(server_pc * p)
-    samp_dis[1] = num1
+    samp_dis[server_case2_cls] = num1
     average_num = (server_pc - num1) / (num_labels - 1)
     resid = average_num - np.floor(average_num)
     sum_res = 0.
     for other_num in range(num_labels - 1):
-        if other_num == 1:
+        if other_num == server_case2_cls:
             continue
         samp_dis[other_num] = int(average_num)
         sum_res += resid
@@ -239,6 +239,8 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
             samp_dis[other_num] += 1
             sum_res -= 1
     samp_dis[num_labels - 1] = server_pc - np.sum(samp_dis[:num_labels - 1])
+
+    print('samp_dis', samp_dis)
 
     
     # randomly assign the data points based on the labels
@@ -256,7 +258,8 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
         lower_bound = y * (1. - bias) / (num_labels - 1)
 
         # experiment 2 only
-        upper_bound_offset = 0.4 if y==0 else 0
+        # upper_bound_offset = 0.4 if y==0 else 0
+        upper_bound_offset = 0.
 
         # print(y, upper_bound, lower_bound)
 
