@@ -304,6 +304,7 @@ class CustomFL:
             networks+=self.benign_nets
             networks+=self.mal_nets
 
+            print('Training benign nets at iteration: ', iter)
             for i in tqdm(range(self.num_of_benign_nets), disable=tqdm_disable):
                 self.train_local_net(False, i, iter)
 
@@ -320,8 +321,8 @@ class CustomFL:
             benign_aggr_net_grad.copy_params(benign_aggr_net.state_dict())
             benign_aggr_net_grad.aggregate([self.global_net.state_dict()], aggr_weights=[-1])
 
-            
-            for i in tqdm(range(self.num_of_mal_nets), disable=True):
+            print('Training malicious nets at iteration: ', iter)            
+            for i in tqdm(range(self.num_of_mal_nets)):
                 self.train_local_net(True, i, iter, ref_net_for_minimizing_dist=(benign_aggr_net_grad, benign_aggr_net))
                 
                 if self.scale_up:
@@ -364,4 +365,15 @@ class CustomFL:
             
             for network in networks:
                 network.copy_params(self.global_net.state_dict())
+
+            elapsed_time = datetime.datetime.now() - begin_time
+
+            if iter==0:
+                first_iter_time = elapsed_time
+
+            print(f'iteration {iter} passed: time elapsed - {elapsed_time}\n')
+
+            if elapsed_time+first_iter_time > max_exec_min:
+                print('Maximum time limit exceeded. Quitting')
+                break
             

@@ -9,6 +9,9 @@ import numpy as np
 from collections import defaultdict
 
 import argparse
+import datetime
+
+begin_time = datetime.datetime.now()
 
 poison_dict = dict()
 poison_dict['poison_delta'] = 0.1
@@ -330,11 +333,14 @@ copylist.append(copylist[-1]+1)
 parser = argparse.ArgumentParser()
 parser.add_argument('--attacker_at_0', dest='aa0', default=0)
 parser.add_argument('--server_pct', dest='server_pct', default=0.1)
+parser.add_argument('--max_exec_min', dest='max_exec_min', default=5)
 
 args = parser.parse_args()
 
 aa0 = int(args.aa0)
 server_pct = float(args.server_pct)
+max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
+
 
 sd, sl, ewd, ewl = assign_data(train_dataset, 0.5, None, p=server_pct)
 
