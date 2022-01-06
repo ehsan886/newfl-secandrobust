@@ -19,7 +19,7 @@ if __name__ == '__main__':
 	)
 
 	for id in range(len(train_loaders[0])):
-		(_, _, train_loader) = train_loaders[0][id]
+		(_, _, train_loader) = train_loaders[1][id]
 		fl.debug_log['label_skew_ratio'].append((id, get_label_skew_ratios(train_loader.dataset)))
 
 	for i in range(len(fl.debug_log['label_skew_ratio'])):

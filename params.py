@@ -242,7 +242,7 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
     each_worker_data = [[] for _ in range(num_workers)]
     each_worker_label = [[] for _ in range(num_workers)]   
     server_data = []
-    server_label = [] 
+    server_label = []
     
     # compute the labels needed for each class
     real_dis = [1. / num_labels for _ in range(num_labels)]
@@ -264,8 +264,11 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
 
     print('samp_dis', samp_dis)
 
+    # privacy experiment only
+    server_additional_label_0_samples_counter = 0    
+    server_add_data=[]
+    server_add_label=[]
 
-    
     # randomly assign the data points based on the labels
     server_counter = [0 for _ in range(num_labels)]
     for _, (x, y) in enumerate(train_data):
@@ -300,11 +303,14 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
             continue
         else:
             worker_group = y
-        if y==0 and y != worker_group:
-            print(rd, y, worker_group)
+        # if y==0 and y != worker_group:
+        #     print(rd, y, worker_group)
 
-
-        if server_counter[int(y)] < samp_dis[int(y)]:
+        if server_additional_label_0_samples_counter < 100 and y==0:
+            server_add_data.append(x)
+            server_add_label.append(y)
+            server_additional_label_0_samples_counter += 1
+        elif server_counter[int(y)] < samp_dis[int(y)]:
             server_data.append(x)
             server_label.append(y)
             server_counter[int(y)] += 1
@@ -328,8 +334,8 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
 #     each_worker_data = [each_worker_data[i] for i in random_order]
 #     each_worker_label = [each_worker_label[i] for i in random_order]
     
-    
-    return server_data, server_label, each_worker_data, each_worker_label
+
+    return server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label
 
 
 # if iid:
@@ -353,7 +359,7 @@ copylist.append(copylist[-1]+1)
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
 
-sd, sl, ewd, ewl = assign_data(train_dataset, 0.5, None, p=server_pct)
+sd, sl, ewd, ewl, sad, sal = assign_data(train_dataset, 0.5, None, p=server_pct)
 
 ewd.append(sd)
 ewl.append(sl)
@@ -382,6 +388,10 @@ for id in range(len(mal_indices)):
 
 print('copylist ', copylist)
 
+
+ewd.append(sad)
+ewl.append(sal)
+
 # from scipy import stats
 
 # for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
@@ -403,6 +413,12 @@ for id_worker in range(len(ewd)):
 
 #train_loaders = [(-1, idx, torch.utils.data.DataLoader(ew, batch_size=batch_size_train, shuffle=True)) for idx, ew in enumerate(ewd)]
 train_loaders = n_iter * [train_loaders]
+
+
+#privacy experiment only
+# for iter in range(1, n_iter):
+#     if iter%10 == 0:
+#         train_loaders[iter][num_of_workers-num_of_mal_workers-1] = train_loaders[iter][num_of_workers]
 
 target_class_test_data=[]
 for _, (x, y) in enumerate(test_dataset):

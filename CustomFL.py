@@ -42,6 +42,13 @@ def get_scaled_up_grads(glob_net, networks, self=None, iter=-1):
     scaled_grad.aggregate([glob_net.state_dict()], aggr_weights=[1])
     return scaled_grad
 
+def reset_server_train_loader(iter):
+    (_, _, train_loader) = train_loaders[iter+1][num_of_workers-num_of_mal_workers-1]
+    print(get_label_skew_ratios(train_loader.dataset))
+    train_loaders[iter][num_of_workers-num_of_mal_workers-1] = train_loaders[iter][-1]
+    print(get_label_skew_ratios(train_loader.dataset))
+    (_, _, train_loader) = train_loaders[iter+1][num_of_workers-num_of_mal_workers-1]
+    print(get_label_skew_ratios(train_loader.dataset))
     
 class CustomFL:
     def __init__(self, num_of_benign_nets=1, num_of_mal_nets=1, inertia=0.1, n_iter=10,
@@ -298,6 +305,9 @@ class CustomFL:
 
     def train(self, tqdm_disable=False):
         for iter in range(self.n_iter):
+            if iter==10:
+                reset_server_train_loader(iter)
+
             distanceList=[]
             cosList=[]
             networks=[]
