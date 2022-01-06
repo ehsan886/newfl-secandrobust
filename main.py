@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
 	fl.train()
 
-	with open(f'output_file_exp2_mal_{num_of_mal_workers}_aa0_{aa0}_all_{num_of_workers}_iters_{n_iter}_epochs_{n_epochs}.txt', 'wb') as f:
+	with open(f'{output_filename}_{begin_time}.txt'.replace(':', '-'), 'wb') as f:
 		pickle.dump(fl.debug_log, f)
 
 	f.close()

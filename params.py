@@ -11,6 +11,24 @@ from collections import defaultdict
 import argparse
 import datetime
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--attacker_at_0', dest='aa0', default=0)
+parser.add_argument('--server_pct', dest='server_pct', default=0.1)
+parser.add_argument('--max_exec_min', dest='max_exec_min', default=5)
+parser.add_argument('--output_filename', dest='output_filename', default='temp_exp')
+parser.add_argument('--num_of_mal_workers', dest='num_of_mal_workers', default=20)
+parser.add_argument('--n_iter', dest='n_iter', default=30)
+parser.add_argument('--poison_starts_at_iter', dest='poison_starts_at_iter', default=0)
+parser.add_argument('--bias', dest='bias', default=0.5)
+parser.add_argument('--upper_bound_offset', dest='upper_bound_offset', default=0)
+
+args = parser.parse_args()
+
+aa0 = int(args.aa0)
+server_pct = float(args.server_pct)
+max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
+output_filename = args.output_filename
+
 begin_time = datetime.datetime.now()
 
 poison_dict = dict()
@@ -31,10 +49,10 @@ log_interval = 10
 
 ### important hyperparameters
 num_of_workers=101
-num_of_mal_workers=50
-n_iter=30
+num_of_mal_workers=int(args.num_of_mal_workers)
+n_iter=int(args.n_iter)
 n_epochs=1
-poison_starts_at_iter=0
+poison_starts_at_iter=int(args.poison_starts_at_iter)
 inertia=0.1
 momentum=0.1
 attack_type='label_flip'
@@ -44,6 +62,7 @@ minimizeDist=False
 target_class=0
 
 iid = False
+bias = float(args.bias)
 num_of_distributions = int(num_of_workers/10)+1
 # num_of_workers_in_distribs = num_of_workers * np.random.dirichlet(np.array(num_of_distributions * [3.0]))
 # num_of_workers_in_distribs = [int(val) for val in num_of_workers_in_distribs]
@@ -245,6 +264,7 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
 
     print('samp_dis', samp_dis)
 
+
     
     # randomly assign the data points based on the labels
     server_counter = [0 for _ in range(num_labels)]
@@ -260,17 +280,19 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
         upper_bound = y * (1. - bias) / (num_labels - 1) + bias
         lower_bound = y * (1. - bias) / (num_labels - 1)
 
+        # print(y, upper_bound, lower_bound)
+
         # experiment 2 only
         # upper_bound_offset = 0.4 if y==0 else 0
-        upper_bound_offset = 0.
-
-        # print(y, upper_bound, lower_bound)
+        upper_bound_offset = float(args.upper_bound_offset) if y==0 else 0
 
         rd = np.random.random_sample()
 
 
+        other_group_size = (1 - upper_bound - upper_bound_offset + lower_bound) / (num_labels - 1)
+
         if rd > upper_bound + upper_bound_offset:
-            worker_group = int(np.floor((rd - upper_bound) / other_group_size) + y + 1)
+            worker_group = int(np.floor((rd - upper_bound - upper_bound_offset) / other_group_size) + y + 1)
         elif rd < lower_bound:
             worker_group = int(np.floor(rd / other_group_size))
         # experiment 2 only
@@ -278,7 +300,8 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
             continue
         else:
             worker_group = y
-        # print(y, worker_group)
+        if y==0 and y != worker_group:
+            print(rd, y, worker_group)
 
 
         if server_counter[int(y)] < samp_dis[int(y)]:
@@ -329,18 +352,6 @@ copylist.append(copylist[-1]+1)
 
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--attacker_at_0', dest='aa0', default=0)
-parser.add_argument('--server_pct', dest='server_pct', default=0.1)
-parser.add_argument('--max_exec_min', dest='max_exec_min', default=5)
-
-args = parser.parse_args()
-
-aa0 = int(args.aa0)
-server_pct = float(args.server_pct)
-max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
-
 
 sd, sl, ewd, ewl = assign_data(train_dataset, 0.5, None, p=server_pct)
 
