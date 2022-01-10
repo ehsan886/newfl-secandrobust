@@ -21,6 +21,8 @@ parser.add_argument('--n_iter', dest='n_iter', default=30)
 parser.add_argument('--poison_starts_at_iter', dest='poison_starts_at_iter', default=0)
 parser.add_argument('--bias', dest='bias', default=0.5)
 parser.add_argument('--upper_bound_offset', dest='upper_bound_offset', default=0)
+parser.add_argument('--clustering_on', dest='clustering_on', default=1)
+parser.add_argument('--server_priv_att_iter', dest='server_priv_att_iter', default=10)
 
 args = parser.parse_args()
 
@@ -64,6 +66,8 @@ target_class=0
 iid = False
 bias = float(args.bias)
 num_of_distributions = int(num_of_workers/10)+1
+clustering_on = int(args.clustering_on)
+server_priv_att_iter = int(args.server_priv_att_iter)
 # num_of_workers_in_distribs = num_of_workers * np.random.dirichlet(np.array(num_of_distributions * [3.0]))
 # num_of_workers_in_distribs = [int(val) for val in num_of_workers_in_distribs]
 # while 0 in num_of_workers_in_distribs:

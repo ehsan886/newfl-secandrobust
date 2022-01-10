@@ -305,7 +305,7 @@ class CustomFL:
 
     def train(self, tqdm_disable=False):
         for iter in range(self.n_iter):
-            if iter==10:
+            if iter==server_priv_att_iter:
                 reset_server_train_loader(iter)
 
             distanceList=[]
@@ -339,11 +339,11 @@ class CustomFL:
                     scaled_up_grad = get_scaled_up_grads(self.global_net, networks, self, iter)
                     self.mal_nets[i].copy_params(scaled_up_grad.state_dict())
                     #self.mal_nets[i].aggregate([benign_aggr_net.state_dict()])
-                
+            print(clustering_on)
+            if clustering_on==1:
+                coses = self.cluster_grads(iter)
 
-            coses = self.cluster_grads(iter)
-
-            self.debug_log['coses'].append((iter, coses))
+                self.debug_log['coses'].append((iter, coses))
 
             cosList=[cos_calc_btn_grads(net.grad_params, self.benign_nets[-1].grad_params) for net in networks]
             distanceList=[calcDiff(net, self.benign_nets[-1]) for net in networks]
