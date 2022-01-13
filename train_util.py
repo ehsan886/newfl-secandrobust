@@ -66,18 +66,32 @@ def train_net(network, optimizer, trainloader, epoch, poisonNow=False, print_fla
             train_counter.append(
                 (batch_idx*64) + ((epoch-1)*len(trainloader.dataset)))
 
+
+def validation_test(network, test_loader, tqdm_disable=True):
+	network.eval()
+	correct = 0
+	with torch.no_grad():
+		for data, target in tqdm(test_loader, disable=tqdm_disable):
+			data, target = get_batch((data, target))
+			output = network(data)
+			loss_func=nn.CrossEntropyLoss()
+			pred = output.data.max(1, keepdim=True)[1]
+			correct += pred.eq(target.data.view_as(pred)).sum()
+	
+	return 100. * correct / len(test_loader.dataset)
+
 def test(network):
 	network.eval()
 	test_loss = 0
 	correct = 0
 	with torch.no_grad():
 		for data, target in tqdm(test_loader):
-		    data, target = get_batch((data, target))
-		    output = network(data)
-		    loss_func=nn.CrossEntropyLoss()
-		    test_loss += loss_func(output, target).item()
-		    pred = output.data.max(1, keepdim=True)[1]
-		    correct += pred.eq(target.data.view_as(pred)).sum()
+			data, target = get_batch((data, target))
+			output = network(data)
+			loss_func=nn.CrossEntropyLoss()
+			test_loss += loss_func(output, target).item()
+			pred = output.data.max(1, keepdim=True)[1]
+			correct += pred.eq(target.data.view_as(pred)).sum()
 	test_loss /= len(test_loader.dataset)
 	test_losses.append(test_loss)
 	print('\nTest set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(

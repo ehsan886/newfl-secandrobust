@@ -103,6 +103,7 @@ class CustomFL:
         self.debug_log['cos_sim']=[]
         self.debug_log['aggr_weights']=[]
         self.debug_log['label_skew_ratio']=[]
+        self.debug_log['val_logs']=[{}]*n_iter
         n_nets=num_of_benign_nets+num_of_mal_nets
         self.cos_matrices=[]
         #self.cos_matrix.append(np.zeros((n_nets, n_nets)))
@@ -213,7 +214,59 @@ class CustomFL:
         print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist2))
         '''
         
-        return coses
+        return coses, clustering.labels_
+
+    def new_aggregation(self, iter=-1):
+        if iter<self.poison_starts_at_iter:
+            self.global_net.set_param_to_zero()
+            self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
+        else:
+            # get clusters
+            coses, clusters = self.cluster_grads(iter)
+            self.debug_log['coses'].append((iter, coses))
+            cluster_dict = {}
+            for idx, group_no in enumerate(clusters):
+                if group_no in cluster_dict:
+                    cluster_dict[group_no].append(idx)
+                else:
+                    cluster_dict[group_no] = [idx]
+
+            for key in cluster_dict.keys():
+                random.shuffle(cluster_dict[key])
+            
+            print(cluster_dict)
+            self.debug_log['val_logs'][iter]['cluster_dict'] = cluster_dict
+
+            # choose validation clients
+            num_of_val_clients = 20
+
+            val_client_indice_tuples = []
+
+            for key in cluster_dict.keys():
+                if len(cluster_dict[key]) > 2:
+                    val_client_indice_tuples.append((key, cluster_dict[key][0]))
+                    val_client_indice_tuples.append((key, cluster_dict[key][1]))
+
+            print(val_client_indice_tuples)
+            self.debug_log['val_logs'][iter]['val_client_indice_tuples'] = val_client_indice_tuples
+
+            # validation test
+            val_acc_mat = np.zeros((101, len(val_client_indice_tuples)), dtype=np.float32).tolist()
+            val_acc_same_group = np.zeros((101, len(val_client_indice_tuples)), dtype=np.int8).tolist()
+            for idx, net in enumerate(self.benign_nets + self.mal_nets):
+                if idx != 80:
+                    for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
+                        _, _, val_test_loader = train_loaders[iter][val_idx]
+                        val_acc = validation_test(net, val_test_loader)
+                        # print(idx, val_idx, cluster_dict[group_no], val_acc)
+                        val_acc_mat[idx][iidx] = val_acc
+                        if idx in cluster_dict[group_no]:
+                            val_acc_same_group[idx][iidx] = 1
+
+            self.debug_log['val_logs'][iter]['val_acc_mat'] = val_acc_mat
+            self.debug_log['val_logs'][iter]['val_acc_same_group'] = val_acc_same_group
+
+            print(self.debug_log['val_logs'])
 
     def FLtrust(self, iter=-1):
         clean_server_grad=None
@@ -339,11 +392,13 @@ class CustomFL:
                     scaled_up_grad = get_scaled_up_grads(self.global_net, networks, self, iter)
                     self.mal_nets[i].copy_params(scaled_up_grad.state_dict())
                     #self.mal_nets[i].aggregate([benign_aggr_net.state_dict()])
-            print(clustering_on)
-            if clustering_on==1:
-                coses = self.cluster_grads(iter)
+            # print(clustering_on)
+            # if clustering_on==1:
+            #     coses = self.cluster_grads(iter)
 
-                self.debug_log['coses'].append((iter, coses))
+            #     self.debug_log['coses'].append((iter, coses))
+            if clustering_on==1:
+                self.new_aggregation(iter)
 
             cosList=[cos_calc_btn_grads(net.grad_params, self.benign_nets[-1].grad_params) for net in networks]
             distanceList=[calcDiff(net, self.benign_nets[-1]) for net in networks]

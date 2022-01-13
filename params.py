@@ -153,7 +153,7 @@ def get_train_noniid(indices):
     return train_loader
 
 def poison_test_dataset(test_dataset, batch_size):
-    logger.info('get poison test loader')
+    # logger.info('get poison test loader')
     # delete the test data with target label
     test_classes = {}
     for ind, x in enumerate(test_dataset):
