@@ -274,7 +274,7 @@ class CustomFL:
                     # val_acc_mat[idx][iidx] = val_acc
                     # if idx in cluster_dict[group_no]:
                     #     val_acc_same_group[idx][iidx] = 1
-                    if idx in cluster_dict[group_no]:
+                    if idx in self.cluster_dict[group_no]:
                         val_acc_same_group = 1
                     else:
                         val_acc_same_group = 0
