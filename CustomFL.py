@@ -104,7 +104,8 @@ class CustomFL:
         self.debug_log['cos_sim']=[]
         self.debug_log['aggr_weights']=[]
         self.debug_log['label_skew_ratio']=[]
-        self.debug_log['val_logs']=[{}]*n_iter
+        self.debug_log['val_logs']=[]
+        self.debug_log['val_logs'].append({} for _ in range(n_iter))
         n_nets=num_of_benign_nets+num_of_mal_nets
         self.cos_matrices=[]
         #self.cos_matrix.append(np.zeros((n_nets, n_nets)))
@@ -235,7 +236,6 @@ class CustomFL:
                 
                 print(cluster_dict)
                 self.cluster_dict=cluster_dict
-                self.debug_log['val_logs'][iter]['cluster_dict'] = cluster_dict
 
                 # choose validation clients
                 self.num_of_val_client_combinations=10
@@ -257,7 +257,6 @@ class CustomFL:
                     print(val_client_indice_tuples)
                     self.val_client_indice_tuples_list.append(val_client_indice_tuples)
                 print(self.val_client_indice_tuples_list)
-                self.debug_log['val_logs'][iter]['self.val_client_indice_tuples_list'] = self.val_client_indice_tuples_list
 
             # validation test
             # val_acc_mat = np.zeros((101, len(val_client_indice_tuples)), dtype=np.float32).tolist()
@@ -282,6 +281,8 @@ class CustomFL:
                 all_val_acc_list.append(val_acc_list)
             # self.debug_log['val_logs'][iter]['val_acc_mat'] = val_acc_mat
             # self.debug_log['val_logs'][iter]['val_acc_same_group'] = val_acc_same_group
+            self.debug_log['val_logs'][iter]['val_client_indice_tuples_list'] = self.val_client_indice_tuples_list
+            self.debug_log['val_logs'][iter]['cluster_dict'] = cluster_dict
             self.debug_log['val_logs'][iter]['all_val_acc_list'] = all_val_acc_list
 
             # print(self.debug_log['val_logs'])
