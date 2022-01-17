@@ -52,7 +52,7 @@ def reset_server_train_loader(iter):
     
 class CustomFL:
     def __init__(self, num_of_benign_nets=1, num_of_mal_nets=1, inertia=0.1, n_iter=10,
-                 n_epochs=3, poison_starts_at_iter=3, learning_rate=0.1, momentum=0, weight_decay=0.1,
+                 n_epochs=3, poison_starts_at_iter=3, validation_starts_at_iter=-1, learning_rate=0.1, momentum=0, weight_decay=0.1,
                  attack_type='label_flip', scale_up=False, minimizeDist=True):
         self.global_net = CNN().to(device)
         self.global_net_optim = SGD(self.global_net.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
@@ -86,6 +86,7 @@ class CustomFL:
         self.learning_rate=learning_rate
         self.momentum=momentum
         self.poison_starts_at_iter=poison_starts_at_iter
+        self.validation_starts_at_iter=validation_starts_at_iter
         self.weight_decay=weight_decay
         self.attack_type=attack_type
         self.scale_up=scale_up
@@ -221,52 +222,69 @@ class CustomFL:
             self.global_net.set_param_to_zero()
             self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
         else:
-            # get clusters
-            coses, clusters = self.cluster_grads(iter)
-            self.debug_log['coses'].append((iter, coses))
-            cluster_dict = {}
-            for idx, group_no in enumerate(clusters):
-                if group_no in cluster_dict:
-                    cluster_dict[group_no].append(idx)
-                else:
-                    cluster_dict[group_no] = [idx]
+            if iter==self.validation_starts_at_iter:
+                # get clusters
+                coses, clusters = self.cluster_grads(iter)
+                self.debug_log['coses'].append((iter, coses))
+                cluster_dict = {}
+                for idx, group_no in enumerate(clusters):
+                    if group_no in cluster_dict:
+                        cluster_dict[group_no].append(idx)
+                    else:
+                        cluster_dict[group_no] = [idx]
+                
+                print(cluster_dict)
+                self.cluster_dict=cluster_dict
+                self.debug_log['val_logs'][iter]['cluster_dict'] = cluster_dict
 
-            for key in cluster_dict.keys():
-                random.shuffle(cluster_dict[key])
-            
-            print(cluster_dict)
-            self.debug_log['val_logs'][iter]['cluster_dict'] = cluster_dict
+                # choose validation clients
+                self.num_of_val_client_combinations=10
+                num_of_val_clients = 20
 
-            # choose validation clients
-            num_of_val_clients = 20
+                val_client_indice_tuples_list = []
 
-            val_client_indice_tuples = []
+                for _ in range(self.num_of_val_client_combinations):
+                    val_client_indice_tuples=[]
 
-            for key in cluster_dict.keys():
-                if len(cluster_dict[key]) > 2:
-                    val_client_indice_tuples.append((key, cluster_dict[key][0]))
-                    val_client_indice_tuples.append((key, cluster_dict[key][1]))
+                    for key in cluster_dict.keys():
+                        random.shuffle(cluster_dict[key])
 
-            print(val_client_indice_tuples)
-            self.debug_log['val_logs'][iter]['val_client_indice_tuples'] = val_client_indice_tuples
+                    for key in cluster_dict.keys():
+                        if len(cluster_dict[key]) > 2:
+                            val_client_indice_tuples.append((key, cluster_dict[key][0]))
+                            val_client_indice_tuples.append((key, cluster_dict[key][1]))
+
+                    print(val_client_indice_tuples)
+                    val_client_indice_tuples_list.append(val_client_indice_tuples)
+                print(val_client_indice_tuples_list)
+                self.debug_log['val_logs'][iter]['val_client_indice_tuples_list'] = val_client_indice_tuples_list
 
             # validation test
-            val_acc_mat = np.zeros((101, len(val_client_indice_tuples)), dtype=np.float32).tolist()
-            val_acc_same_group = np.zeros((101, len(val_client_indice_tuples)), dtype=np.int8).tolist()
+            # val_acc_mat = np.zeros((101, len(val_client_indice_tuples)), dtype=np.float32).tolist()
+            # val_acc_same_group = np.zeros((101, len(val_client_indice_tuples)), dtype=np.int8).tolist()
+            all_val_acc_list = []
             for idx, net in enumerate(self.benign_nets + self.mal_nets):
-                if idx != 80:
-                    for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
-                        _, _, val_test_loader = train_loaders[iter][val_idx]
-                        val_acc = validation_test(net, val_test_loader)
-                        # print(idx, val_idx, cluster_dict[group_no], val_acc)
-                        val_acc_mat[idx][iidx] = val_acc
-                        if idx in cluster_dict[group_no]:
-                            val_acc_same_group[idx][iidx] = 1
+                combination_index = random.randint(0, self.num_of_val_client_combinations-1)
+                val_client_indice_tuples = val_client_indice_tuples_list[combination_index]
+                val_acc_list=[]
+                for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
+                    _, _, val_test_loader = train_loaders[iter][val_idx]
+                    val_acc = validation_test(net, val_test_loader)
+                    # print(idx, val_idx, cluster_dict[group_no], val_acc)
+                    # val_acc_mat[idx][iidx] = val_acc
+                    # if idx in cluster_dict[group_no]:
+                    #     val_acc_same_group[idx][iidx] = 1
+                    if idx in cluster_dict[group_no]:
+                        val_acc_same_group = 1
+                    else:
+                        val_acc_same_group = 0
+                    val_acc_list.append((val_idx, val_acc_same_group, val_acc))
+                all_val_acc_list.append(val_acc_list)
+            # self.debug_log['val_logs'][iter]['val_acc_mat'] = val_acc_mat
+            # self.debug_log['val_logs'][iter]['val_acc_same_group'] = val_acc_same_group
+            self.debug_log['val_logs'][iter]['all_val_acc_list'] = all_val_acc_list
 
-            self.debug_log['val_logs'][iter]['val_acc_mat'] = val_acc_mat
-            self.debug_log['val_logs'][iter]['val_acc_same_group'] = val_acc_same_group
-
-            print(self.debug_log['val_logs'])
+            # print(self.debug_log['val_logs'])
 
     def FLtrust(self, iter=-1):
         clean_server_grad=None
@@ -358,6 +376,7 @@ class CustomFL:
 
     def train(self, tqdm_disable=False):
         for iter in range(self.n_iter):
+            self.save_log(iter)
             if iter==server_priv_att_iter:
                 reset_server_train_loader(iter)
 
@@ -400,22 +419,22 @@ class CustomFL:
             if clustering_on==1:
                 self.new_aggregation(iter)
 
-            cosList=[cos_calc_btn_grads(net.grad_params, self.benign_nets[-1].grad_params) for net in networks]
-            distanceList=[calcDiff(net, self.benign_nets[-1]) for net in networks]
+            # cosList=[cos_calc_btn_grads(net.grad_params, self.benign_nets[-1].grad_params) for net in networks]
+            # distanceList=[calcDiff(net, self.benign_nets[-1]) for net in networks]
 
-            #self.cluster_grads()
+            # #self.cluster_grads()
 
-            self.log.append((iter, 'Benign net distance', 'train', distanceList[:self.num_of_benign_nets]))
-            #print('Benign net distance', distanceList[:self.num_of_benign_nets])
-            self.log.append((iter, 'Malicious net distance', 'train', distanceList[self.num_of_benign_nets:]))
-            #print('Malicious net distance', distanceList[self.num_of_benign_nets:])
-            self.log.append((iter, 'Cos sim list', 'train', cosList))
-            #print('cos_sim list ', cosList)
+            # self.log.append((iter, 'Benign net distance', 'train', distanceList[:self.num_of_benign_nets]))
+            # #print('Benign net distance', distanceList[:self.num_of_benign_nets])
+            # self.log.append((iter, 'Malicious net distance', 'train', distanceList[self.num_of_benign_nets:]))
+            # #print('Malicious net distance', distanceList[self.num_of_benign_nets:])
+            # self.log.append((iter, 'Cos sim list', 'train', cosList))
+            # #print('cos_sim list ', cosList)
 
             # aggregate nets
             #self.global_net.set_param_to_zero()
             #self.global_net.aggregate([network.state_dict() for network in networks])
-            self.FLtrust(iter=iter)
+            # self.FLtrust(iter=iter)
             print('\n\n\nAggregate test at iter ', iter)
             acc=test(self.global_net)
             self.debug_log['main_acc'].append((iter, 'Test accuracy: agg net', 'train', acc))
@@ -442,3 +461,9 @@ class CustomFL:
                 print('Maximum time limit exceeded. Quitting')
                 break
             
+    def save_log(self, iter):
+        import pickle
+        with open(f'{output_filename}_{begin_time}_log_at_iter_{iter}.txt'.replace(':', '-'), 'wb') as f:
+            pickle.dump(self.debug_log, f)
+
+        f.close()
