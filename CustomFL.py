@@ -241,7 +241,7 @@ class CustomFL:
                 self.num_of_val_client_combinations=10
                 num_of_val_clients = 20
 
-                val_client_indice_tuples_list = []
+                self.val_client_indice_tuples_list = []
 
                 for _ in range(self.num_of_val_client_combinations):
                     val_client_indice_tuples=[]
@@ -255,9 +255,9 @@ class CustomFL:
                             val_client_indice_tuples.append((key, cluster_dict[key][1]))
 
                     print(val_client_indice_tuples)
-                    val_client_indice_tuples_list.append(val_client_indice_tuples)
-                print(val_client_indice_tuples_list)
-                self.debug_log['val_logs'][iter]['val_client_indice_tuples_list'] = val_client_indice_tuples_list
+                    self.val_client_indice_tuples_list.append(val_client_indice_tuples)
+                print(self.val_client_indice_tuples_list)
+                self.debug_log['val_logs'][iter]['self.val_client_indice_tuples_list'] = self.val_client_indice_tuples_list
 
             # validation test
             # val_acc_mat = np.zeros((101, len(val_client_indice_tuples)), dtype=np.float32).tolist()
@@ -265,7 +265,7 @@ class CustomFL:
             all_val_acc_list = []
             for idx, net in enumerate(self.benign_nets + self.mal_nets):
                 combination_index = random.randint(0, self.num_of_val_client_combinations-1)
-                val_client_indice_tuples = val_client_indice_tuples_list[combination_index]
+                val_client_indice_tuples = self.val_client_indice_tuples_list[combination_index]
                 val_acc_list=[]
                 for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
                     _, _, val_test_loader = train_loaders[iter][val_idx]
