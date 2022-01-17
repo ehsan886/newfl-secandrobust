@@ -283,7 +283,7 @@ class CustomFL:
             # self.debug_log['val_logs'][iter]['val_acc_mat'] = val_acc_mat
             # self.debug_log['val_logs'][iter]['val_acc_same_group'] = val_acc_same_group
             self.debug_log['val_logs'][iter]['val_client_indice_tuples_list'] = self.val_client_indice_tuples_list
-            self.debug_log['val_logs'][iter]['cluster_dict'] = cluster_dict
+            self.debug_log['val_logs'][iter]['cluster_dict'] = self.cluster_dict
             self.debug_log['val_logs'][iter]['all_val_acc_list'] = all_val_acc_list
 
             # print(self.debug_log['val_logs'])
