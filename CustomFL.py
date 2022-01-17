@@ -220,7 +220,7 @@ class CustomFL:
     def new_aggregation(self, iter=-1):
         coses, clusters = self.cluster_grads(iter)
         self.debug_log['coses'].append((iter, coses))
-        if iter<self.poison_starts_at_iter:
+        if iter<self.validation_starts_at_iter:
             self.global_net.set_param_to_zero()
             self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
         else:
