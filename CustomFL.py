@@ -105,7 +105,8 @@ class CustomFL:
         self.debug_log['aggr_weights']=[]
         self.debug_log['label_skew_ratio']=[]
         self.debug_log['val_logs']=[]
-        self.debug_log['val_logs'].append({} for _ in range(n_iter))
+        for _ in range(n_iter):
+            self.debug_log['val_logs'].append({}) 
         n_nets=num_of_benign_nets+num_of_mal_nets
         self.cos_matrices=[]
         #self.cos_matrix.append(np.zeros((n_nets, n_nets)))
@@ -377,7 +378,6 @@ class CustomFL:
 
     def train(self, tqdm_disable=False):
         for iter in range(self.n_iter):
-            self.save_log(iter)
             if iter==server_priv_att_iter:
                 reset_server_train_loader(iter)
 
@@ -457,6 +457,8 @@ class CustomFL:
                 first_iter_time = elapsed_time
 
             print(f'iteration {iter} passed: time elapsed - {elapsed_time}\n')
+
+            self.save_log(iter)
 
             if elapsed_time+first_iter_time > max_exec_min:
                 print('Maximum time limit exceeded. Quitting')
