@@ -350,6 +350,7 @@ class CustomFL:
                         current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
                         if current_val_score_on_that_group < 0.5:
                             all_val_score[client_id] = prev_val_score/2
+                            print("DEBUG ", all_val_score[client_id], prev_val_score)
                             all_val_score_min_grp[client_id] = prev_val_grp_no
                 self.all_val_score = all_val_score
                 self.all_val_score_min_grp = all_val_score_min_grp
