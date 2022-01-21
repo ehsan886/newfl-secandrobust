@@ -220,14 +220,17 @@ class CustomFL:
         return coses, clustering.labels_
 
     def new_aggregation(self, iter=-1):
-        coses, clusters = self.cluster_grads(iter)
-        self.debug_log['coses'].append((iter, coses))
         if iter<self.validation_starts_at_iter:
+            coses, clusters = self.cluster_grads(iter)
+            self.debug_log['coses'].append((iter, coses))
             self.global_net.set_param_to_zero()
             self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
         else:
             if iter==self.validation_starts_at_iter:
                 # get clusters
+                        
+                coses, clusters = self.cluster_grads(iter)
+                self.debug_log['coses'].append((iter, coses))
                 cluster_dict = {}
                 for idx, group_no in enumerate(clusters):
                     if group_no in cluster_dict:
@@ -278,7 +281,7 @@ class CustomFL:
                         val_acc_same_group = 1
                     else:
                         val_acc_same_group = 0
-                    val_acc_list.append((val_idx, val_acc_same_group, val_acc))
+                    val_acc_list.append((val_idx, val_acc_same_group, val_acc.item()))
                 all_val_acc_list.append(val_acc_list)
             # self.debug_log['val_logs'][iter]['val_acc_mat'] = val_acc_mat
             # self.debug_log['val_logs'][iter]['val_acc_same_group'] = val_acc_same_group
@@ -287,6 +290,85 @@ class CustomFL:
             self.debug_log['val_logs'][iter]['all_val_acc_list'] = all_val_acc_list
 
             # print(self.debug_log['val_logs'])
+
+            # aggregation
+
+            def get_group_no(validator_id, clustr_dict):
+                for grp_no in clustr_dict.keys():
+                    if validator_id in clustr_dict[grp_no]:
+                        return grp_no
+                return -1
+
+            def get_min_group_and_score(val_score_by_grp_dict):
+                min_val = 100
+                min_grp_no = -1
+                for grp_no in val_score_by_grp_dict.keys():
+                    if val_score_by_group_dict[grp_no] < min_val:
+                        min_val = val_score_by_group_dict[grp_no]
+                        min_grp_no = grp_no
+                return min_grp_no, min_val
+
+            all_val_score_by_group_dict=[]
+
+            all_val_score = []
+            all_val_score_min_grp=[]
+            for client_id in range(self.num_of_benign_nets + self.num_of_mal_nets):
+                val_score_by_group_dict={}
+                val_acc_list = all_val_acc_list[client_id]
+                for iidx, (val_idx, _, val_acc) in enumerate(val_acc_list):
+                    grp_no = get_group_no(val_idx, self.cluster_dict)
+                    if grp_no in val_score_by_group_dict.keys():
+                        val_score_by_group_dict[grp_no] += val_acc
+                        val_score_by_group_dict[grp_no] /= 2
+                    else:
+                        val_score_by_group_dict[grp_no] = val_acc
+                all_val_score_by_group_dict.append(val_score_by_group_dict)
+                min_val_grp_no, min_val_score = get_min_group_and_score(val_score_by_group_dict)
+                all_val_score.append(min_val_score)
+                all_val_score_min_grp.append(min_val_grp_no)
+                print(val_acc_list, val_score_by_group_dict, min_val_grp_no, min_val_score)
+            # print(all_val_score_by_group_dict)
+
+            if iter == self.validation_starts_at_iter:
+
+                self.all_val_score = all_val_score
+                self.all_val_score_min_grp = all_val_score_min_grp
+
+                aggr_weights = np.array(all_val_score)
+                aggr_weights = aggr_weights/np.sum(aggr_weights)
+
+                self.global_net.set_param_to_zero()
+                self.global_net.aggregate([net.state_dict() for net in self.benign_nets + self.mal_nets],
+                    aggr_weights=aggr_weights
+                )
+            
+            else:
+                for client_id in range(self.num_of_benign_nets + self.num_of_mal_nets):
+                    prev_val_score = self.all_val_score[client_id]
+                    if prev_val_score < 50.:
+                        prev_val_grp_no = self.all_val_score_min_grp[client_id]
+                        current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
+                        if current_val_score_on_that_group < 0.5:
+                            all_val_score[client_id] = prev_val_score/2
+                            all_val_score_min_grp[client_id] = prev_val_grp_no
+                self.all_val_score = all_val_score
+                self.all_val_score_min_grp = all_val_score_min_grp
+
+                aggr_weights = np.array(all_val_score)
+                aggr_weights = np.minimum(aggr_weights, 50.)
+                aggr_weights = aggr_weights/np.sum(aggr_weights)
+
+                self.global_net.set_param_to_zero()
+                self.global_net.aggregate([net.state_dict() for net in self.benign_nets + self.mal_nets],
+                    aggr_weights=aggr_weights
+                )
+            
+            self.debug_log['val_logs'][iter]['all_val_scores'] = self.all_val_score
+            self.debug_log['val_logs'][iter]['all_val_score_min_grp'] = self.all_val_score_min_grp
+            self.debug_log['val_logs'][iter]['aggr_weights'] = aggr_weights
+
+
+
 
     def FLtrust(self, iter=-1):
         clean_server_grad=None
