@@ -552,6 +552,7 @@ class CustomFL:
             print(f'iteration {iter} passed: time elapsed - {elapsed_time}\n')
 
             self.save_log(iter)
+            self.save_global_model(iter)
 
             if elapsed_time+first_iter_time > max_exec_min:
                 print('Maximum time limit exceeded. Quitting')
@@ -563,3 +564,6 @@ class CustomFL:
             pickle.dump(self.debug_log, f)
 
         f.close()
+
+    def save_global_model(self, iter):
+        torch.save(self.global_net.state_dict(), f'{output_filename}_global_model_iter_{iter}.pth')

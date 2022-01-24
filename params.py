@@ -312,7 +312,7 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
         # if y==0 and y != worker_group:
         #     print(rd, y, worker_group)
 
-        if server_additional_label_0_samples_counter < 100 and y==0:
+        if server_additional_label_0_samples_counter < 100 and y==0 and server_priv_att_iter!=-1:
             server_add_data.append(x)
             server_add_label.append(y)
             server_additional_label_0_samples_counter += 1
@@ -413,9 +413,10 @@ for id_worker in range(len(ewd)):
     dataset_per_worker=[]
     for idx in range(len(ewd[id_worker])):
         dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
-    train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=batch_size_train, shuffle=True)
-    train_loaders.append((-1, id_worker, train_loader))
-    
+    if len(dataset_per_worker) != 0:
+        train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=batch_size_train, shuffle=True)
+        train_loaders.append((-1, id_worker, train_loader))
+        
 
 #train_loaders = [(-1, idx, torch.utils.data.DataLoader(ew, batch_size=batch_size_train, shuffle=True)) for idx, ew in enumerate(ewd)]
 train_loaders = n_iter * [train_loaders]

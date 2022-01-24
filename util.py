@@ -1,8 +1,6 @@
 import torch
 import numpy as np
 
-from params import *
-
 def convert_model_to_param_list(model):
     '''
     num_of_param=0

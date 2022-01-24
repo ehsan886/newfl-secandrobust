@@ -6,8 +6,6 @@ import numpy as np
 
 from util import convert_model_to_param_list
 
-from params import *
-
 class SimpleNet(nn.Module):
     def __init__(self, name=None, created_time=None, is_malicious=False, net_id=-1):
         super(SimpleNet, self).__init__()
