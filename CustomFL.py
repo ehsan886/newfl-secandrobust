@@ -265,10 +265,19 @@ class CustomFL:
             # validation test
             # val_acc_mat = np.zeros((101, len(val_client_indice_tuples)), dtype=np.float32).tolist()
             # val_acc_same_group = np.zeros((101, len(val_client_indice_tuples)), dtype=np.int8).tolist()
+            def check_in_val_combinations(val_tuples, client_id):
+                for (_, val_id) in val_tuples:
+                    if client_id == val_id:
+                        return True
+                return False
+
             all_val_acc_list = []
             for idx, net in enumerate(self.benign_nets + self.mal_nets):
                 combination_index = random.randint(0, self.num_of_val_client_combinations-1)
                 val_client_indice_tuples = self.val_client_indice_tuples_list[combination_index]
+                while check_in_val_combinations(val_client_indice_tuples, idx):
+                    combination_index = random.randint(0, self.num_of_val_client_combinations-1)
+                    val_client_indice_tuples = self.val_client_indice_tuples_list[combination_index]
                 val_acc_list=[]
                 for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
                     _, _, val_test_loader = train_loaders[iter][val_idx]
@@ -350,7 +359,6 @@ class CustomFL:
                         current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
                         if current_val_score_on_that_group < 50:
                             all_val_score[client_id] = prev_val_score/2
-                            print("DEBUG ", all_val_score[client_id], prev_val_score)
                             all_val_score_min_grp[client_id] = prev_val_grp_no
                 self.all_val_score = all_val_score
                 self.all_val_score_min_grp = all_val_score_min_grp
@@ -502,6 +510,8 @@ class CustomFL:
             #     self.debug_log['coses'].append((iter, coses))
             if clustering_on==1:
                 self.new_aggregation(iter)
+            else:
+                self.FLtrust(iter)
 
             # cosList=[cos_calc_btn_grads(net.grad_params, self.benign_nets[-1].grad_params) for net in networks]
             # distanceList=[calcDiff(net, self.benign_nets[-1]) for net in networks]
