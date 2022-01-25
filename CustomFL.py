@@ -331,7 +331,7 @@ class CustomFL:
                         # val_score_by_group_dict[grp_no] += val_acc
                         # val_score_by_group_dict[grp_no] /= 2
                         # if minimum
-                        val_score_by_group_dict[grp_no] = np.min(val_score_by_group_dict[grp_no], val_acc)
+                        val_score_by_group_dict[grp_no] = np.minimum(val_score_by_group_dict[grp_no], val_acc)
 
                     else:
                         val_score_by_group_dict[grp_no] = val_acc
