@@ -327,8 +327,12 @@ class CustomFL:
                 for iidx, (val_idx, _, val_acc) in enumerate(val_acc_list):
                     grp_no = get_group_no(val_idx, self.cluster_dict)
                     if grp_no in val_score_by_group_dict.keys():
-                        val_score_by_group_dict[grp_no] += val_acc
-                        val_score_by_group_dict[grp_no] /= 2
+                        # if average
+                        # val_score_by_group_dict[grp_no] += val_acc
+                        # val_score_by_group_dict[grp_no] /= 2
+                        # if minimum
+                        val_score_by_group_dict[grp_no] = np.min(val_score_by_group_dict[grp_no], val_acc)
+
                     else:
                         val_score_by_group_dict[grp_no] = val_acc
                 all_val_score_by_group_dict.append(val_score_by_group_dict)
