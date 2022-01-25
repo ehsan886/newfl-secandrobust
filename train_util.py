@@ -67,12 +67,15 @@ def train_net(network, optimizer, trainloader, epoch, poisonNow=False, print_fla
                 (batch_idx*64) + ((epoch-1)*len(trainloader.dataset)))
 
 
-def validation_test(network, test_loader, tqdm_disable=True):
+def validation_test(network, test_loader, is_poisonous=False, tqdm_disable=True):
 	network.eval()
 	correct = 0
 	with torch.no_grad():
 		for data, target in tqdm(test_loader, disable=tqdm_disable):
-			data, target = get_batch((data, target))
+			if is_poisonous:
+				data, target, poison_num = get_poison_batch_special_label_flip((data, target))
+			else:
+				data, target = get_batch((data, target))
 			output = network(data)
 			loss_func=nn.CrossEntropyLoss()
 			pred = output.data.max(1, keepdim=True)[1]

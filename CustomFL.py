@@ -281,7 +281,7 @@ class CustomFL:
                 val_acc_list=[]
                 for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
                     _, _, val_test_loader = train_loaders[iter][val_idx]
-                    val_acc = validation_test(net, val_test_loader)
+                    val_acc = validation_test(net, val_test_loader, is_poisonous=(iter>=self.poison_starts_at_iter) and (val_idx>self.num_of_benign_nets))
                     # print(idx, val_idx, cluster_dict[group_no], val_acc)
                     # val_acc_mat[idx][iidx] = val_acc
                     # if idx in cluster_dict[group_no]:
