@@ -24,6 +24,7 @@ parser.add_argument('--upper_bound_offset', dest='upper_bound_offset', default=0
 parser.add_argument('--clustering_on', dest='clustering_on', default=1)
 parser.add_argument('--server_priv_att_iter', dest='server_priv_att_iter', default=-1)
 parser.add_argument('--validation_starts_at_iter', dest='validation_starts_at_iter', default=10)
+parser.add_argument('--dataset', dest='dataset_name', default='mnist')
 
 args = parser.parse_args()
 
@@ -31,6 +32,7 @@ aa0 = int(args.aa0)
 server_pct = float(args.server_pct)
 max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
 output_filename = args.output_filename
+dataset_name = args.dataset_name
 
 begin_time = datetime.datetime.now()
 
@@ -111,9 +113,14 @@ transform = transforms.Compose([transforms.ToTensor(),
     ### if dataset is cifar
     #transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
-train_dataset = datasets.FashionMNIST('', train=True, download=True,
-                               transform=transform)
-test_dataset = datasets.FashionMNIST('', train=False, transform=transform)
+if dataset_name=='mnist':
+    train_dataset = datasets.MNIST('', train=True, download=True,
+                                transform=transform)
+    test_dataset = datasets.MNIST('', train=False, transform=transform)
+else:
+    train_dataset = datasets.FashionMNIST('', train=True, download=True,
+                                transform=transform)
+    test_dataset = datasets.FashionMNIST('', train=False, transform=transform)
 
 test_loader = torch.utils.data.DataLoader(
   test_dataset,

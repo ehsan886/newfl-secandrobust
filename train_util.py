@@ -46,25 +46,25 @@ def train(network, optimizer, epoch):
 
 
 def train_net(network, optimizer, trainloader, epoch, poisonNow=False, print_flag=False, tqdm_disable=True, attack_type='backdoor'):
-    for batch_idx, (data, target) in enumerate(tqdm(trainloader, disable=tqdm_disable)):
-        if poisonNow:
-            data, target, poison_num = get_poison_batch_special_label_flip((data, target))
-        else:
-            data, target = get_batch((data, target))
-        optimizer.zero_grad()
-        output = network(data)
-        loss = loss_func(output, target)
-        loss.backward()
-        #inv_grad_test(network)
-        optimizer.step()
-        if batch_idx % log_interval == 0:
-            if print_flag:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(trainloader.dataset),
-                100. * batch_idx / len(trainloader), loss.item()))
-            train_losses.append(loss.item())
-            train_counter.append(
-                (batch_idx*64) + ((epoch-1)*len(trainloader.dataset)))
+	for batch_idx, (data, target) in enumerate(tqdm(trainloader, disable=tqdm_disable)):
+		if poisonNow:
+			data, target, poison_num = get_poison_batch_special_label_flip((data, target))
+		else:
+			data, target = get_batch((data, target))
+		optimizer.zero_grad()
+		output = network(data)
+		loss = loss_func(output, target)
+		loss.backward()
+		#inv_grad_test(network)
+		optimizer.step()
+		if batch_idx % log_interval == 0:
+			if print_flag:
+				print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+				epoch, batch_idx * len(data), len(trainloader.dataset),
+				100. * batch_idx / len(trainloader), loss.item()))
+			train_losses.append(loss.item())
+			train_counter.append(
+				(batch_idx*64) + ((epoch-1)*len(trainloader.dataset)))
 
 
 def validation_test(network, test_loader, is_poisonous=False, tqdm_disable=True):
