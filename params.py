@@ -372,7 +372,7 @@ copylist.append(copylist[-1]+1)
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
 
-sd, sl, ewd, ewl, sad, sal = assign_data(train_dataset, 0.5, None, p=server_pct)
+sd, sl, ewd, ewl, sad, sal = assign_data(train_dataset, bias, None, p=server_pct)
 
 ewd.append(sd)
 ewl.append(sl)
