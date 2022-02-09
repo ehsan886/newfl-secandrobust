@@ -111,6 +111,11 @@ class CustomFL:
         self.cos_matrices=[]
         #self.cos_matrix.append(np.zeros((n_nets, n_nets)))
 
+        import os
+        from datetime import datetime
+        self.date_string = datetime.now().strftime("%m-%d_%H:%M:%S") + '/'
+        os.mkdir('out/nets/' + datetime.now().strftime("%m-%d_%H:%M:%S"))
+
     def cluster_grads(self, iter=-1):
         nets = self.benign_nets + self.mal_nets
         for net in nets:
@@ -120,6 +125,8 @@ class CustomFL:
         X = [np.array(net.grad_params) for net in nets]
         X= np.array(X)
         clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
+        np.savetxt('out/nets/' + self.date_string + 'net-' + str(iter) + '.txt', X, delimiter=',')
+        np.savetxt('out/nets/' + self.date_string + 'labels-' + str(iter) + '.txt', copylist, delimiter=',')
         from sklearn.metrics.cluster import adjusted_rand_score
         # print('Original Copylist', copylist)
         # print('Found clusters', clustering.labels_)

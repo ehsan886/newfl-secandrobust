@@ -12,6 +12,7 @@ import argparse
 import datetime
 
 parser = argparse.ArgumentParser()
+
 parser.add_argument('--attacker_at_0', dest='aa0', default=0)
 parser.add_argument('--server_pct', dest='server_pct', default=0.1)
 parser.add_argument('--max_exec_min', dest='max_exec_min', default=5)
@@ -24,13 +25,25 @@ parser.add_argument('--upper_bound_offset', dest='upper_bound_offset', default=0
 parser.add_argument('--clustering_on', dest='clustering_on', default=1)
 parser.add_argument('--server_priv_att_iter', dest='server_priv_att_iter', default=-1)
 parser.add_argument('--validation_starts_at_iter', dest='validation_starts_at_iter', default=10)
-
 args = parser.parse_args()
 
 aa0 = int(args.aa0)
 server_pct = float(args.server_pct)
 max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
 output_filename = args.output_filename
+
+print('attacker_at_0: ' + str(args.aa0))
+print('server_pct: ' + str(args.server_pct))
+print('max_exec_min: ' + str(args.max_exec_min))
+print('output_filename: ' + str(args.output_filename))
+print('num_of_mal_workers: ' + str(args.num_of_mal_workers))
+print('n_iter: ' + str(args.n_iter))
+print('poison_starts_at_iter: ' + str(args.poison_starts_at_iter))
+print('bias: ' + str(args.bias))
+print('upper_bound_offset: ' + str(args.upper_bound_offset))
+print('clustering_on: ' + str(args.clustering_on))
+print('server_priv_att_iter: ' + str(args.server_priv_att_iter))
+print('validation_starts_at_iter: ' + str(args.validation_starts_at_iter))
 
 begin_time = datetime.datetime.now()
 
@@ -359,8 +372,9 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
 #                     indices_per_participant.items()]
 #     train_loaders = n_iter * [train_loaders]
 
-copylist=[int(np.floor(i/((num_of_workers-1)/10))) for i in range(num_of_workers-1)]
+copylist=[int(np.floor(i/ ( (num_of_workers-1) /10 ) )) for i in range(num_of_workers-1)]
 copylist.append(copylist[-1]+1)
+print('>> copylist', copylist)
 
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
