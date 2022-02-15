@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.autograd import Variable
+from torch.utils.data import SubsetRandomSampler
 import numpy as np
 
 from tqdm import tqdm
@@ -70,6 +71,20 @@ def train_net(network, optimizer, trainloader, epoch, poisonNow=False, print_fla
 def validation_test(network, test_loader, is_poisonous=False, tqdm_disable=True):
 	network.eval()
 	correct = 0
+	correct_by_class = {}
+
+	dataset_classes = {}
+	validation_dataset = test_loader.dataset
+
+	for ind, x in enumerate(validation_dataset):
+		_, label = x
+		#if ind in self.params['poison_images'] or ind in self.params['poison_images_test']:
+		#    continue
+		if label in dataset_classes:
+			dataset_classes[label].append(ind)
+		else:
+			dataset_classes[label] = [ind]
+
 	with torch.no_grad():
 		for data, target in tqdm(test_loader, disable=tqdm_disable):
 			if is_poisonous:
@@ -80,8 +95,25 @@ def validation_test(network, test_loader, is_poisonous=False, tqdm_disable=True)
 			loss_func=nn.CrossEntropyLoss()
 			pred = output.data.max(1, keepdim=True)[1]
 			correct += pred.eq(target.data.view_as(pred)).sum()
-	
-	return 100. * correct / len(test_loader.dataset)
+
+		for class_label in dataset_classes.keys():
+			correct_by_class[class_label] = 0
+			one_class_test_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=100, sampler=SubsetRandomSampler(indices=dataset_classes[class_label]))
+
+			for data, target in tqdm(one_class_test_loader, disable=tqdm_disable):
+				if is_poisonous:
+					data, target, poison_num = get_poison_batch_special_label_flip((data, target))
+				else:
+					data, target = get_batch((data, target))
+				output = network(data)
+				loss_func=nn.CrossEntropyLoss()
+				pred = output.data.max(1, keepdim=True)[1]
+				correct_by_class[class_label] += pred.eq(target.data.view_as(pred)).sum()
+
+			correct_by_class[class_label] = 100. * correct_by_class[class_label]/ len(dataset_classes[class_label])
+			correct_by_class[class_label] = correct_by_class[class_label].item()
+		# print(correct_by_class)
+	return 100. * correct / len(test_loader.dataset), correct_by_class
 
 def test(network):
 	network.eval()

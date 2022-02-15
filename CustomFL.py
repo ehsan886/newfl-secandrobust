@@ -116,10 +116,37 @@ class CustomFL:
         for net in nets:
             net.calc_grad(self.global_net.state_dict(), change_self=False)
 
-        from sklearn.cluster import AgglomerativeClustering
+        from sklearn.cluster import AgglomerativeClustering, SpectralClustering
         X = [np.array(net.grad_params) for net in nets]
         X= np.array(X)
-        clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
+        clustering = SpectralClustering(n_clusters=iterative_k, affinity='cosine').fit(X)
+        # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
+        from sklearn.metrics.cluster import adjusted_rand_score
+        # print('Original Copylist', copylist)
+        # print('Found clusters', clustering.labels_)
+
+
+
+        #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
+        #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+        print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
+        self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
+        self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
+        self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
+
+        return clustering.labels_
+    
+
+    def cluster_grads_wra(self, iter=-1):
+        nets = self.benign_nets + self.mal_nets
+        for net in nets:
+            net.calc_grad(self.global_net.state_dict(), change_self=False)
+
+        from sklearn.cluster import AgglomerativeClustering, SpectralClustering
+        X = [np.array(net.grad_params) for net in nets]
+        X= np.array(X)
+        clustering = SpectralClustering(n_clusters=num_of_distributions, affinity='cosine').fit(X)
+        # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
         from sklearn.metrics.cluster import adjusted_rand_score
         # print('Original Copylist', copylist)
         # print('Found clusters', clustering.labels_)
@@ -219,18 +246,19 @@ class CustomFL:
         
         return coses, clustering.labels_
 
-    def new_aggregation(self, iter=-1):
+    def new_aggregation(self, iter=-1, tqdm_disable=False):
         if iter<self.validation_starts_at_iter:
-            coses, clusters = self.cluster_grads(iter)
-            self.debug_log['coses'].append((iter, coses))
+            # coses, clusters = self.cluster_grads(iter)
+            # self.debug_log['coses'].append((iter, coses))
             self.global_net.set_param_to_zero()
             self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
         else:
             if iter==self.validation_starts_at_iter:
                 # get clusters
                         
-                coses, clusters = self.cluster_grads(iter)
-                self.debug_log['coses'].append((iter, coses))
+                # coses, clusters = self.cluster_grads(iter)
+                # self.debug_log['coses'].append((iter, coses))
+                clusters = self.cluster_grads(iter)
                 cluster_dict = {}
                 for idx, group_no in enumerate(clusters):
                     if group_no in cluster_dict:
@@ -272,7 +300,8 @@ class CustomFL:
                 return False
 
             all_val_acc_list = []
-            for idx, net in enumerate(self.benign_nets + self.mal_nets):
+            print(f'Validating all clients at iter {iter}')
+            for idx, net in enumerate(tqdm(self.benign_nets + self.mal_nets, disable=tqdm_disable)):
                 combination_index = random.randint(0, self.num_of_val_client_combinations-1)
                 val_client_indice_tuples = self.val_client_indice_tuples_list[combination_index]
                 while check_in_val_combinations(val_client_indice_tuples, idx):
@@ -281,7 +310,7 @@ class CustomFL:
                 val_acc_list=[]
                 for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
                     _, _, val_test_loader = train_loaders[iter][val_idx]
-                    val_acc = validation_test(net, val_test_loader, is_poisonous=(iter>=self.poison_starts_at_iter) and (val_idx>self.num_of_benign_nets))
+                    val_acc, val_acc_by_class = validation_test(net, val_test_loader, is_poisonous=(iter>=self.poison_starts_at_iter) and (val_idx>self.num_of_benign_nets))
                     # print(idx, val_idx, cluster_dict[group_no], val_acc)
                     # val_acc_mat[idx][iidx] = val_acc
                     # if idx in cluster_dict[group_no]:
@@ -290,7 +319,7 @@ class CustomFL:
                         val_acc_same_group = 1
                     else:
                         val_acc_same_group = 0
-                    val_acc_list.append((val_idx, val_acc_same_group, val_acc.item()))
+                    val_acc_list.append((val_idx, val_acc_same_group, val_acc.item(), val_acc_by_class))
                 all_val_acc_list.append(val_acc_list)
             # self.debug_log['val_logs'][iter]['val_acc_mat'] = val_acc_mat
             # self.debug_log['val_logs'][iter]['val_acc_same_group'] = val_acc_same_group
@@ -324,7 +353,7 @@ class CustomFL:
             for client_id in range(self.num_of_benign_nets + self.num_of_mal_nets):
                 val_score_by_group_dict={}
                 val_acc_list = all_val_acc_list[client_id]
-                for iidx, (val_idx, _, val_acc) in enumerate(val_acc_list):
+                for iidx, (val_idx, _, val_acc, _) in enumerate(val_acc_list):
                     grp_no = get_group_no(val_idx, self.cluster_dict)
                     if grp_no in val_score_by_group_dict.keys():
                         # if average

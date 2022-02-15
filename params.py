@@ -24,7 +24,8 @@ parser.add_argument('--upper_bound_offset', dest='upper_bound_offset', default=0
 parser.add_argument('--clustering_on', dest='clustering_on', default=1)
 parser.add_argument('--server_priv_att_iter', dest='server_priv_att_iter', default=-1)
 parser.add_argument('--validation_starts_at_iter', dest='validation_starts_at_iter', default=10)
-parser.add_argument('--dataset', dest='dataset_name', default='mnist')
+parser.add_argument('--dataset', dest='dataset_name', default='fmnist')
+parser.add_argument('--iterative_k', dest='iterative_k', default=10)
 
 args = parser.parse_args()
 
@@ -33,6 +34,7 @@ server_pct = float(args.server_pct)
 max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
 output_filename = args.output_filename
 dataset_name = args.dataset_name
+iterative_k = int(args.iterative_k)
 
 begin_time = datetime.datetime.now()
 
@@ -58,6 +60,7 @@ num_of_mal_workers=int(args.num_of_mal_workers)
 n_iter=int(args.n_iter)
 n_epochs=1
 poison_starts_at_iter=int(args.poison_starts_at_iter)
+# poison_starts_at_iter=12
 validation_starts_at_iter=int(args.validation_starts_at_iter)
 inertia=0.1
 momentum=0.1
