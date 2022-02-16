@@ -53,9 +53,14 @@ batch_size_test = 1000
 learning_rate = 0.01
 log_interval = 10
 
-
 ### important hyperparameters
-num_of_workers=101
+flt_aggr=True
+clustering_on = int(args.clustering_on)
+if clustering_on:
+    flt_aggr=False
+num_of_workers=100
+if flt_aggr:
+    num_of_workers+=1
 num_of_mal_workers=int(args.num_of_mal_workers)
 n_iter=int(args.n_iter)
 n_epochs=1
@@ -73,7 +78,6 @@ target_class=0
 iid = False
 bias = float(args.bias)
 num_of_distributions = int(num_of_workers/10)+1
-clustering_on = int(args.clustering_on)
 server_priv_att_iter = int(args.server_priv_att_iter)
 # num_of_workers_in_distribs = num_of_workers * np.random.dirichlet(np.array(num_of_distributions * [3.0]))
 # num_of_workers_in_distribs = [int(val) for val in num_of_workers_in_distribs]
@@ -249,7 +253,7 @@ def get_label_skew_ratios(dataset, num_of_classes=10):
         dataset_classes[key] = dataset_classes[key]
     return dataset_classes
 
-def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1):
+def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
     # assign data to the clients
     other_group_size = (1 - bias) / (num_labels - 1)
     worker_per_group = num_workers / num_labels
@@ -326,7 +330,7 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
             server_add_data.append(x)
             server_add_label.append(y)
             server_additional_label_0_samples_counter += 1
-        elif server_counter[int(y)] < samp_dis[int(y)]:
+        elif server_counter[int(y)] < samp_dis[int(y)] and flt_aggr:
             server_data.append(x)
             server_label.append(y)
             server_counter[int(y)] += 1
@@ -335,7 +339,6 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
             selected_worker = int(worker_group * worker_per_group + int(np.floor(rd * worker_per_group)))
             each_worker_data[selected_worker].append(x)
             each_worker_label[selected_worker].append(y)
-    
    
     #     server_data = nd.concat(*server_data, dim=0)
     #     server_label = nd.concat(*server_label, dim=0)
@@ -369,16 +372,21 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
 #                     indices_per_participant.items()]
 #     train_loaders = n_iter * [train_loaders]
 
-copylist=[int(np.floor(i/((num_of_workers-1)/10))) for i in range(num_of_workers-1)]
-copylist.append(copylist[-1]+1)
+
+if flt_aggr:
+    copylist=[int(np.floor(i/((num_of_workers-1)/10))) for i in range(num_of_workers-1)]
+    copylist.append(copylist[-1]+1)
+else:
+    copylist=[int(np.floor(i/((num_of_workers)/10))) for i in range(num_of_workers)]
 
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
 
-sd, sl, ewd, ewl, sad, sal = assign_data(train_dataset, bias, None, p=server_pct)
+sd, sl, ewd, ewl, sad, sal = assign_data(train_dataset, bias, None, p=server_pct, flt_aggr=flt_aggr)
 
-ewd.append(sd)
-ewl.append(sl)
+if flt_aggr:
+    ewd.append(sd)
+    ewl.append(sl)
 
 group_0_list=np.arange(10)
 np.random.shuffle(group_0_list)
@@ -404,9 +412,9 @@ for id in range(len(mal_indices)):
 
 print('copylist ', copylist)
 
-
-ewd.append(sad)
-ewl.append(sal)
+if flt_aggr and server_priv_att_iter!=-1:
+    ewd.append(sad)
+    ewl.append(sal)
 
 # from scipy import stats
 
@@ -415,7 +423,6 @@ ewl.append(sal)
 # 	mals_benign_brothers_clusters = [copylist[(iid+1)%len(copylist)] for iid in mals_benign_brothers[0]]
 # 	print(mals_benign_brothers, mals_benign_brothers_clusters)
 # 	print(stats.mode(mals_benign_brothers_clusters)[0])
-
 
 
 train_loaders = []
@@ -427,7 +434,6 @@ for id_worker in range(len(ewd)):
         train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=batch_size_train, shuffle=True)
         train_loaders.append((-1, id_worker, train_loader))
         
-
 #train_loaders = [(-1, idx, torch.utils.data.DataLoader(ew, batch_size=batch_size_train, shuffle=True)) for idx, ew in enumerate(ewd)]
 train_loaders = n_iter * [train_loaders]
 
