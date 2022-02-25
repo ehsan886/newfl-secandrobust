@@ -190,7 +190,117 @@ def experiment():
             print('Average malicious detection score: ' + str(round(np.mean(mal_detection_scores), 2)))
             print('')
 
+def combo_approach():
+    print('=========================================================================================\n')
+    print('Remove all malicious via agglomerative, then recluster via spectral.\n')
+    # print('Reference agglomerative clusters to remove skew malicious group via spectral clustering.\n')
+    print('=========================================================================================')
+    for k in range(n_clusters - n_range, n_clusters + n_range):
+
+        aggl_clusters = [[] for _ in range(k)]
+        for i, label in enumerate((AgglomerativeClustering(n_clusters=k, affinity='cosine', linkage='complete').fit(nets)).labels_.tolist()):
+            aggl_clusters[label].append(i)
+        for cluster in aggl_clusters:
+            cluster.sort()
+        aggl_clusters.sort(key = lambda cluster: len(cluster), reverse = True)
+
+        grads = []
+        centroids = []
+        cosine_costs = []
+        euclidean_costs = []
+        for cluster in aggl_clusters:
+            g = [nets[i] for i in cluster]
+            grads.append(g)
+            cosine_cost, euclidean_cost, centroid = cluster_cost(g)
+            cosine_costs.append(cosine_cost)
+            euclidean_costs.append(euclidean_cost)
+            centroids.append(centroid)
+
+        mal_ref_cluster_idx = np.argmax(euclidean_costs)
+        mal_ref_cluster = aggl_clusters[mal_ref_cluster_idx]
+
+        filtered_nets = list(filter(lambda x: x is not None, [(None if idx in mal_ref_cluster else x) for idx, x in enumerate(nets)]))
+        filtered_labels = list(filter(lambda x: x is not None, [(None if idx in mal_ref_cluster else x) for idx, x in enumerate(labels)]))
+
+        adjustments = [0 for _ in range(len(nets))]
+        running_adjustment = 0
+        for idx, x in enumerate(nets):
+            if idx in mal_ref_cluster:
+                running_adjustment += 1
+                adjustments[idx] += running_adjustment
+
+        spec_clusters_1 = [[] for _ in range(k)]
+        f = (SpectralClustering(n_clusters=k, affinity='cosine').fit(filtered_nets)).labels_.tolist()
+        for i, label in enumerate(f):
+            spec_clusters_1[label].append(i)
+        for cluster in spec_clusters_1:
+            cluster.sort()
+        spec_clusters_1.sort(key = lambda cluster: len(cluster), reverse = True)
+
+        print((colored('k = ' + str(k), attrs=['underline']) if k == n_clusters else ('k = ' + str(k))) + '\tclusters\trand score: ' + str(adjusted_rand_score(filtered_labels, f)))
+        print('\t=============================================')
+        for cluster in spec_clusters_1:
+            display_string = '\t['
+            for j, x in enumerate(cluster):
+                adjusted_x = x + adjustments[x]
+                if j > 80:
+                    display_string += ' ...'
+                    break
+                display_string += ' '
+                if adjusted_x > (n_workers - n_mali):
+                    if adjusted_x <= (n_workers - n_mali + attacker_at):
+                        display_string += colored(int(labels[adjusted_x]), 'white', 'on_red')
+                    else:
+                        display_string += colored(int(labels[adjusted_x]), 'red')
+                else:
+                    display_string += colored(int(labels[adjusted_x]), 'blue')
+            display_string += ' ]'
+
+            print('' + display_string)
+
+        spec_clusters_2 = [[] for _ in range(k)]
+        f2 = (SpectralClustering(n_clusters=k, affinity='cosine').fit(nets)).labels_.tolist()
+        for i, label in enumerate(f2):
+            spec_clusters_2[label].append(i)
+        for cluster in spec_clusters_2:
+            cluster.sort()
+        spec_clusters_2.sort(key = lambda cluster: len(cluster), reverse = True)
+        
+        # print((colored('k = ' + str(k), attrs=['underline']) if k == n_clusters else ('k = ' + str(k))) + '\tclusters\trand score: ' + str(adjusted_rand_score(labels, f2)))
+        # print('\t=============================================')
+        # for idx, cluster in enumerate(spec_clusters_2):
+        #     mal_skew_cluster = None
+        #     cluster_labels = [labels[x] for x in cluster]
+        #     label_counts = list(sorted(zip(cluster_labels, map(cluster_labels.count, cluster_labels)), key = lambda x: x[1], reverse = True))
+        #     dominant_label = label_counts[0][0]
+        #     matches = sum([1 if (dominant_label == labels[x] and x in mal_ref_cluster) else 0 for x in cluster])
+        #     if (matches / len(cluster)) >= 0.9:
+        #         mal_skew_cluster = cluster
+
+        #     display_string = '\t['
+        #     for j, x in enumerate(cluster):
+        #         if j > 80:
+        #             display_string += ' ...'
+        #             break
+        #         display_string += ' '
+        #         if x > (n_workers - n_mali):
+        #             if x <= (n_workers - n_mali + attacker_at):
+        #                 display_string += colored(int(labels[x]), 'white', 'on_red')
+        #             else:
+        #                 display_string += colored(int(labels[x]), 'red')
+        #         else:
+        #             display_string += colored(int(labels[x]), 'blue')
+        #     display_string += ' ]'
+
+        #     if mal_skew_cluster is not None:
+        #         display_string += colored('\tidentified as skewed malicious cluster', 'magenta')
+
+        #     print('' + display_string)
+        
+        # print('')
+
 experiment()
+# combo_approach()
 
 # start validation at iteration 7, using labels there
 
