@@ -26,6 +26,7 @@ parser.add_argument('--server_priv_att_iter', dest='server_priv_att_iter', defau
 parser.add_argument('--validation_starts_at_iter', dest='validation_starts_at_iter', default=10)
 parser.add_argument('--dataset', dest='dataset_name', default='fmnist')
 parser.add_argument('--iterative_k', dest='iterative_k', default=10)
+parser.add_argument('--save_local_models_opt', dest='save_local_models_opt', default=1)
 
 args = parser.parse_args()
 
@@ -35,6 +36,7 @@ max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
 output_filename = args.output_filename
 dataset_name = args.dataset_name
 iterative_k = int(args.iterative_k)
+save_local_models_opt = int(args.save_local_models_opt)
 
 begin_time = datetime.datetime.now()
 
