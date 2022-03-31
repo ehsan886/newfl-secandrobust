@@ -26,7 +26,8 @@ parser.add_argument('--server_priv_att_iter', dest='server_priv_att_iter', defau
 parser.add_argument('--validation_starts_at_iter', dest='validation_starts_at_iter', default=10)
 parser.add_argument('--dataset', dest='dataset_name', default='fmnist')
 parser.add_argument('--iterative_k', dest='iterative_k', default=10)
-parser.add_argument('--save_local_models_opt', dest='save_local_models_opt', default=1)
+parser.add_argument('--save_local_models_opt', dest='save_local_models_opt', default=0)
+parser.add_argument('--evasion_type', dest='evasion_type', default=None)
 
 args = parser.parse_args()
 
@@ -35,6 +36,7 @@ server_pct = float(args.server_pct)
 max_exec_min = datetime.timedelta(minutes= float(args.max_exec_min))
 output_filename = args.output_filename
 dataset_name = args.dataset_name
+evasion_type = args.evasion_type
 iterative_k = int(args.iterative_k)
 save_local_models_opt = int(args.save_local_models_opt)
 
@@ -251,8 +253,9 @@ def get_label_skew_ratios(dataset, num_of_classes=10):
         else:
             dataset_classes[label] = 1
     for key in dataset_classes.keys():
-    	# dataset_classes[key] = dataset_classes[key]/len(dataset)
-        dataset_classes[key] = dataset_classes[key]
+    	# dataset_classes[key] = dataset_classes[key] 
+
+        dataset_classes[key] = float("{:.2f}".format(dataset_classes[key]/len(dataset)))
     return dataset_classes
 
 def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
@@ -374,6 +377,43 @@ def assign_data(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc
 #                     indices_per_participant.items()]
 #     train_loaders = n_iter * [train_loaders]
 
+def assign_data_nonuniform(train_data, bias, ctx, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
+    server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label = assign_data(train_data, bias, ctx, num_labels, 10, server_pc, p, server_case2_cls, dataset, seed, flt_aggr)
+    ewd = [[] for _ in range(num_workers)]
+    ewl = [[] for _ in range(num_workers)]
+    group_sizes = [np.random.randint(5, 16) for i in range(9)]
+    group_sizes.append(num_workers-sum(group_sizes))
+
+    for i in range(len(each_worker_data)):
+        group_size = group_sizes[i]
+        label_data = np.array(each_worker_label[i])
+        i_indices = np.where(label_data==i)[0].tolist()
+        not_i_indices = np.where(label_data!=i)[0].tolist()
+        split_map_for_i = []
+        split_map_for_i.append(0)
+        split_map_for_not_i = [0]
+        for ii in range(1, 10):
+            split_ratio_for_i = np.random.normal(ii*0.1, 0.015)
+            split_ratio_for_not_i = ii*0.2 - split_ratio_for_i
+            split_map_for_i.append(int(split_ratio_for_i*len(i_indices)))
+            split_map_for_not_i.append(int(split_ratio_for_not_i*len(not_i_indices)))
+        split_map_for_i.append(len(i_indices))
+        split_map_for_not_i.append(len(not_i_indices))
+        i_indices_list = [i_indices[split_map_for_i[ii]:split_map_for_i[ii+1]] for ii in range(10)]
+        not_i_indices_list = [not_i_indices[split_map_for_not_i[ii]:split_map_for_not_i[ii+1]] for ii in range(10)]
+        indice_map = [0]*len(each_worker_data[i])
+        for ii in range(10):
+            for iii in i_indices_list[ii]:
+                indice_map[iii] = ii 
+            for iii in not_i_indices_list[ii]:
+                indice_map[iii] = ii 
+        size_of_group = int(len(each_worker_data[i])/10)
+        stop_val = 10 * size_of_group
+        for idx in range(len(each_worker_data[i])):
+            ewd[i*10 + indice_map[idx]].append(each_worker_data[i][idx])
+            ewl[i*10 + indice_map[idx]].append(each_worker_label[i][idx])
+    return server_data, server_label, ewd, ewl, server_add_data, server_add_label
+
 
 if flt_aggr:
     copylist=[int(np.floor(i/((num_of_workers-1)/10))) for i in range(num_of_workers-1)]
@@ -384,7 +424,7 @@ else:
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
 
-sd, sl, ewd, ewl, sad, sal = assign_data(train_dataset, bias, None, p=server_pct, flt_aggr=flt_aggr)
+sd, sl, ewd, ewl, sad, sal = assign_data_nonuniform(train_dataset, bias, None, p=server_pct, flt_aggr=flt_aggr)
 
 if flt_aggr:
     ewd.append(sd)

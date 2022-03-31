@@ -1,3 +1,4 @@
+from dataclasses import replace
 from faulthandler import disable
 import torch
 import torch.nn as nn
@@ -97,6 +98,8 @@ class CustomFL:
         self.attack_type=attack_type
         self.scale_up=scale_up
 
+        self.validator_trust_scores = [1. for _ in range(num_of_benign_nets + num_of_mal_nets)]
+
         self.log=[]
         self.debug_log={}
         self.debug_log['cluster']=[]
@@ -139,16 +142,54 @@ class CustomFL:
         centroid = np.mean(cluster, axis=0)
         return np.mean(euclidean_distances([candidate, centroid]))
 
-    def cluster_grads(self, iter=-1, clustering_method='Spectral'):
+    def get_average_distance(self, candidate, cluster):
+        # return np.sum(euclidean_distances(cluster, [candidate]))/(len(cluster)-1)
+        return np.sum(cosine_distances(cluster, [candidate]))/(len(cluster)-1)
+
+    def get_label_skew_ratios(self):
+        lsr_list = self.debug_log['label_skew_ratio']
+        lsr_dict_list = [lsr for _, lsr in lsr_list]
+        lsrs = []
+        for lsr_dict in lsr_dict_list:
+            new_lsr = []
+            for i in range(10):
+                new_lsr.append(lsr_dict[i])
+            new_lsr = np.array(new_lsr)
+            new_lsr = new_lsr/np.sum(new_lsr)
+            lsrs.append(new_lsr)
+
+        ### malicious evasion attempts
+        mal_indices = np.arange(num_of_workers-num_of_mal_workers, num_of_workers-num_of_mal_workers + aa0)
+
+        if evasion_type=='random':
+            for ind in mal_indices:
+                lsrs[ind] = lsrs[random.randint(0, num_of_workers-num_of_mal_workers)]
+        elif evasion_type=='grouped':
+            # new_lsr = [5*i for i in range(10)]
+            new_lsr = [10, 100, 10, 100, 10, 100, 10, 100, 10, 100]
+            new_lsr = np.array(new_lsr)
+            new_lsr = new_lsr/np.sum(new_lsr)
+            for ind in mal_indices:
+                lsrs[ind] = new_lsr
+        lsrs = np.array(lsrs)
+        return lsrs
+
+    def cluster_grads(self, iter=-1, clustering_method='Spectral', clustering_params='grads'):
         nets = self.benign_nets + self.mal_nets
         for net in nets:
             net.calc_grad(self.global_net.state_dict(), change_self=False)
 
         from sklearn.cluster import AgglomerativeClustering, SpectralClustering
-        X = [np.array(net.grad_params) for net in nets]
-        X= np.array(X)
+
+        nets = [np.array(net.grad_params) for net in nets]
+        nets= np.array(nets)
         if save_local_models_opt:
-            self.save_local_models(iter, X)
+            self.save_local_models(iter, nets)
+        if clustering_params=='lsrs':
+            X = self.get_label_skew_ratios()
+        elif clustering_params=='grads':
+            X = nets
+
         if clustering_method == 'Spectral':
             clustering = SpectralClustering(n_clusters=iterative_k, affinity='cosine').fit(X)
         elif clustering_method == 'Agglomerative':
@@ -169,11 +210,19 @@ class CustomFL:
         for i, cluster in enumerate(clusters):
             cluster.sort(key = lambda x: self.get_validation_score(X[x], grads_for_clusters[i]))
 
-        # print('clusters ', clusters)
 
-        # for i, cluster in enumerate(clusters):
-        #     clusters[i] = cluster[:5]
-        # print('clusters ', clusters)
+        if clustering_params=='lsrs': 
+            grads_for_clusters = []       
+            for cluster in clusters:
+                grads = [nets[i] for i in cluster]
+                grads_for_clusters.append(grads)
+
+            print('clusters ', clusters)
+
+            for i, cluster in enumerate(clusters):
+                cluster.sort(key = lambda x: self.get_average_distance(nets[x], grads_for_clusters[i]))
+                clusters[i] = cluster[:5]
+            print('clusters ', clusters)
 
         # print('Clustering cost ',self.clustering_cost(clustering.labels_, X, iterative_k))
         # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
@@ -485,11 +534,11 @@ class CustomFL:
 
     def combined_clustering_guided_aggregation(self, iter=-1, tqdm_disable=False):
         if iter==0:
-            _, clusters = self.cluster_grads(iter)
+            _, clusters = self.cluster_grads(iter, clustering_params='lsrs')
             self.clusters = clusters
             print('Spectral clustering output')
             self.print_clusters(clusters)
-        if iter<5:
+        if iter<0:
             # def check_in_val_combinations(val_tuples, client_id):
             #     for (_, val_id) in val_tuples:
             #         if client_id == val_id:
@@ -537,27 +586,39 @@ class CustomFL:
             # agglomerative clustering based validation
 
             #get agglomerative clusters
-            _, clusters_agg = self.cluster_grads(iter, clustering_method='Agglomerative')
+            if iter==0 or np.random.random_sample() < 0.2:
+                _, self.clusters_agg = self.cluster_grads(iter, clustering_method='Agglomerative')
+            clusters_agg = self.clusters_agg
             self.print_clusters(clusters_agg)
             nets = self.benign_nets + self.mal_nets
             all_val_acc_list_dict = {}
             print(f'Validating all clients at iter {iter}')
+            val_client_indice_tuples=[]
+            for i, val_cluster in enumerate(self.clusters):
+                val_trust_scores = [self.validator_trust_scores[vid] for vid in val_cluster]
+                val_trust_scores = np.array(val_trust_scores)/sum(val_trust_scores)
+                if len(val_cluster) > 2:
+                    # v1, v2 = random.sample(val_cluster, 2)
+                    v1, v2 = np.random.choice(val_cluster, 2, replace=False, p=val_trust_scores)
+                    val_client_indice_tuples.append((i, v1))
+                    val_client_indice_tuples.append((i, v2))
+
             for idx, cluster in enumerate(tqdm(clusters_agg, disable=tqdm_disable)):
                 nets_in_cluster = [nets[iidx].state_dict() for iidx in cluster]
                 cluster_avg_net = CNN()
                 cluster_avg_net.set_param_to_zero()
                 cluster_avg_net.aggregate(nets_in_cluster)
 
-                val_client_indice_tuples=[]
-                for i, val_cluster in enumerate(self.clusters):
-                    if len(val_cluster) > 2:
-                        v1, v2 = random.sample(val_cluster, 2)
-                        val_client_indice_tuples.append((i, v1))
-                        val_client_indice_tuples.append((i, v2))
 
                 val_acc_list=[]
                 for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
-                    _, _, val_test_loader = train_loaders[iter][val_idx]
+                    # no validation data exchange between malicious clients
+                    # _, _, val_test_loader = train_loaders[iter][val_idx]
+                    # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
+                    if val_idx<self.num_of_benign_nets or aa0==0:
+                        _, _, val_test_loader = train_loaders[iter][val_idx]
+                    else:
+                        _, _, val_test_loader = train_loaders[iter][self.num_of_benign_nets]
                     val_acc, val_acc_by_class = validation_test(cluster_avg_net, val_test_loader, is_poisonous=(iter>=self.poison_starts_at_iter) and (val_idx>self.num_of_benign_nets))
                     # print(idx, val_idx, cluster_dict[group_no], val_acc)
                     # val_acc_mat[idx][iidx] = val_acc
@@ -594,24 +655,78 @@ class CustomFL:
         for client_id in range(self.num_of_benign_nets + self.num_of_mal_nets):
             val_score_by_group_dict={}
             val_acc_list = all_val_acc_list[client_id]
-            for iidx, (val_idx, _, val_acc, _) in enumerate(val_acc_list):
+            # take minimum of two
+            # for iidx, (val_idx, _, val_acc, _) in enumerate(val_acc_list):
+            #     grp_no = get_group_no(val_idx, self.clusters)
+            #     if grp_no in val_score_by_group_dict.keys():
+            #         # if average
+            #         # val_score_by_group_dict[grp_no] += val_acc
+            #         # val_score_by_group_dict[grp_no] /= 2
+            #         # if minimum
+            #         val_score_by_group_dict[grp_no] = np.minimum(val_score_by_group_dict[grp_no], val_acc)
+
+            #     else:
+            #         val_score_by_group_dict[grp_no] = val_acc
+
+            
+            # take the one closer to the others
+            validators = {}
+            for iidx, (val_idx, _, val_acc, val_acc_report) in enumerate(val_acc_list):
                 grp_no = get_group_no(val_idx, self.clusters)
                 if grp_no in val_score_by_group_dict.keys():
                     # if average
                     # val_score_by_group_dict[grp_no] += val_acc
                     # val_score_by_group_dict[grp_no] /= 2
                     # if minimum
-                    val_score_by_group_dict[grp_no] = np.minimum(val_score_by_group_dict[grp_no], val_acc)
-
+                    val_score_by_group_dict[grp_no].append((val_acc, val_acc_report))
+                    validators[grp_no].append(val_idx)
                 else:
-                    val_score_by_group_dict[grp_no] = val_acc
+                    val_score_by_group_dict[grp_no] = [(val_acc, val_acc_report)]
+                    validators[grp_no]= [val_idx]
+            
+            all_grp_nos = list(val_score_by_group_dict.keys())
+            total_acc = 0.
+            for grp_no in all_grp_nos:
+                for (val_acc, val_acc_report) in val_score_by_group_dict[grp_no]:
+                    total_acc += val_acc_report[0]
+
+            new_val_score_by_group_dict = {}
+            for grp_no in all_grp_nos:
+                val_acc_0 = val_score_by_group_dict[grp_no][0][1][0]
+                val_acc_1 = val_score_by_group_dict[grp_no][1][1][0]
+                total_acc_excluding = total_acc - val_acc_0 - val_acc_1
+                mean_acc_excluding = total_acc_excluding/(2*(len(all_grp_nos)-1))
+                if min(abs(mean_acc_excluding-val_acc_0),abs(mean_acc_excluding-val_acc_1))>40.:
+                    repl_acc = 0.
+                    for grp_idx in all_grp_nos:
+                        if grp_idx != grp_no:
+                            for (val_acc, val_acc_report) in val_score_by_group_dict[grp_idx]:
+                                repl_acc += val_acc
+                    repl_acc = repl_acc/(2*(len(all_grp_nos)-1))
+                    new_val_score_by_group_dict[grp_no] = repl_acc
+                    for validator in validators[grp_no]:
+                        self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+                elif abs(mean_acc_excluding-val_acc_0)<abs(mean_acc_excluding-val_acc_1):
+                    if abs(mean_acc_excluding-val_acc_1)>40.:
+                        validator = validators[grp_no][1]
+                        self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+                    new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][0][0]
+                else:
+                    if abs(mean_acc_excluding-val_acc_0)>40.:
+                        validator = validators[grp_no][0]
+                        self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+                    new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][1][0]
+            val_score_by_group_dict = new_val_score_by_group_dict
+                            
             all_val_score_by_group_dict.append(val_score_by_group_dict)
             min_val_grp_no, min_val_score = get_min_group_and_score(val_score_by_group_dict)
             all_val_score.append(min_val_score)
             all_val_score_min_grp.append(min_val_grp_no)
               
-
-        if iter == 0:
+        if iter<0:
+            self.global_net.set_param_to_zero()
+            self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
+        elif iter == 0:
 
             self.all_val_score = all_val_score
             self.all_val_score_min_grp = all_val_score_min_grp
@@ -644,11 +759,16 @@ class CustomFL:
             self.global_net.aggregate([net.state_dict() for net in self.benign_nets + self.mal_nets],
                 aggr_weights=aggr_weights
             )
-        
-        
-        self.debug_log['val_logs'][iter]['all_val_scores'] = self.all_val_score
-        self.debug_log['val_logs'][iter]['all_val_score_min_grp'] = self.all_val_score_min_grp
-        self.debug_log['val_logs'][iter]['aggr_weights'] = aggr_weights        
+
+            self.debug_log['val_logs'][iter]['agglom_cluster_list'] = clusters_agg
+            self.debug_log['val_logs'][iter]['all_val_acc_list'] = all_val_acc_list
+            self.debug_log['val_logs'][iter]['all_val_scores'] = self.all_val_score
+            self.debug_log['val_logs'][iter]['all_val_score_min_grp'] = self.all_val_score_min_grp
+            self.debug_log['val_logs'][iter]['aggr_weights'] = aggr_weights
+            self.debug_log['val_logs'][iter]['all_val_score_by_group_dict'] = all_val_score_by_group_dict
+            self.debug_log['val_logs'][iter]['validator_trust_scores'] = self.validator_trust_scores
+
+            print('\n\n\nValidator Trust Scores\n\n', self.validator_trust_scores)
 
 
 
@@ -834,7 +954,7 @@ class CustomFL:
                 break
             
     def save_log(self, iter):
-        with open(f'output/{output_filename}/logs/log_at_iter_{iter}.txt'.replace(':', '-'), 'wb') as f:
+        with open(f'output/{output_filename}/logs/{output_filename}_log_at_iter_{iter}.txt'.replace(':', '-'), 'wb') as f:
             pickle.dump(self.debug_log, f)
 
         f.close()
