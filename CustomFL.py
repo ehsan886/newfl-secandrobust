@@ -8,8 +8,8 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 import numpy as np
 
-from scipy import stats
-import os
+# from scipy import stats
+import os, shutil
 import pickle
 from termcolor import colored
 
@@ -120,6 +120,9 @@ class CustomFL:
         self.cos_matrices=[]
         #self.cos_matrix.append(np.zeros((n_nets, n_nets)))
 
+        if os.path.isdir(f'output/{output_filename}'):
+            shutil.rmtree(f'output/{output_filename}')
+
         os.makedirs(f'output/{output_filename}/nets')
         os.makedirs(f'output/{output_filename}/logs')
         os.makedirs(f'output/{output_filename}/global_models')
@@ -221,7 +224,10 @@ class CustomFL:
 
             for i, cluster in enumerate(clusters):
                 cluster.sort(key = lambda x: self.get_average_distance(nets[x], grads_for_clusters[i]))
-                clusters[i] = cluster[:5]
+                # clusters[i] = cluster[:5]
+                for idx, cluster_elem in enumerate(clusters[i]):
+                    if idx>=5:
+                        self.validator_trust_scores[cluster_elem] = 1/idx
             print('clusters ', clusters)
 
         # print('Clustering cost ',self.clustering_cost(clustering.labels_, X, iterative_k))
@@ -242,114 +248,114 @@ class CustomFL:
         return clustering.labels_, clusters
     
 
-    def cluster_grads_wra(self, iter=-1):
-        nets = self.benign_nets + self.mal_nets
-        for net in nets:
-            net.calc_grad(self.global_net.state_dict(), change_self=False)
+    # def cluster_grads_wra(self, iter=-1):
+    #     nets = self.benign_nets + self.mal_nets
+    #     for net in nets:
+    #         net.calc_grad(self.global_net.state_dict(), change_self=False)
 
-        from sklearn.cluster import AgglomerativeClustering, SpectralClustering
-        X = [np.array(net.grad_params) for net in nets]
-        X= np.array(X)
-        clustering = SpectralClustering(n_clusters=num_of_distributions, affinity='cosine').fit(X)
-        # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
-        from sklearn.metrics.cluster import adjusted_rand_score
-        # print('Original Copylist', copylist)
-        # print('Found clusters', clustering.labels_)
+    #     from sklearn.cluster import AgglomerativeClustering, SpectralClustering
+    #     X = [np.array(net.grad_params) for net in nets]
+    #     X= np.array(X)
+    #     clustering = SpectralClustering(n_clusters=num_of_distributions, affinity='cosine').fit(X)
+    #     # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
+    #     from sklearn.metrics.cluster import adjusted_rand_score
+    #     # print('Original Copylist', copylist)
+    #     # print('Found clusters', clustering.labels_)
 
 
 
-        #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
-        #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
-        print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
-        self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
-        self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
-        self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
+    #     #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
+    #     #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+    #     print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
+    #     self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
+    #     self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
+    #     self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
 
-        correct_c=[]
-        wrong_c=[]
-        for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
-            mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
-            mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
-            # print(mals_benign_brothers, mals_benign_brothers_clusters)
-            benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
+    #     correct_c=[]
+    #     wrong_c=[]
+    #     for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
+    #         mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
+    #         mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
+    #         # print(mals_benign_brothers, mals_benign_brothers_clusters)
+    #         benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
 
-            if clustering.labels_[mal]==benign_group_num:
-                correct_c.append(copylist[mal])
-            else:
-                wrong_c.append(copylist[mal])
+    #         if clustering.labels_[mal]==benign_group_num:
+    #             correct_c.append(copylist[mal])
+    #         else:
+    #             wrong_c.append(copylist[mal])
 
-        print('correct_c ', len(correct_c), correct_c)
-        print('wrong_c ', len(wrong_c), wrong_c)
-        self.debug_log['cluster_mal_wra'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
+    #     print('correct_c ', len(correct_c), correct_c)
+    #     print('wrong_c ', len(wrong_c), wrong_c)
+    #     self.debug_log['cluster_mal_wra'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
 
         
-        coses=[]
+    #     coses=[]
         
-        for i1, net1 in enumerate(nets):
-            coses_l=[]
-            for i2, net2 in enumerate(nets):
-                coses_l.append(cos_calc_btn_grads(net1.grad_params, net2.grad_params))
-            coses.append(coses_l)
+    #     for i1, net1 in enumerate(nets):
+    #         coses_l=[]
+    #         for i2, net2 in enumerate(nets):
+    #             coses_l.append(cos_calc_btn_grads(net1.grad_params, net2.grad_params))
+    #         coses.append(coses_l)
             
-        coses = np.array(coses)
+    #     coses = np.array(coses)
         
-        '''
-        self.cos_matrix = self.cos_matrix + coses
-        self.cos_matrix = self.cos_matrix/np.max(self.cos_matrix)
-        '''
-        self.cos_matrices.append(coses)
-        print(len(self.cos_matrices))
+    #     '''
+    #     self.cos_matrix = self.cos_matrix + coses
+    #     self.cos_matrix = self.cos_matrix/np.max(self.cos_matrix)
+    #     '''
+    #     self.cos_matrices.append(coses)
+    #     print(len(self.cos_matrices))
         
-        num_of_coses = np.minimum(len(self.cos_matrices), 5)
+    #     num_of_coses = np.minimum(len(self.cos_matrices), 5)
         
-        cos_matrix=np.zeros((len(nets), len(nets)))
-        for i in range(num_of_coses):
-            cos_matrix+=self.cos_matrices[-i-1]
+    #     cos_matrix=np.zeros((len(nets), len(nets)))
+    #     for i in range(num_of_coses):
+    #         cos_matrix+=self.cos_matrices[-i-1]
             
-        cos_matrix = cos_matrix/num_of_coses
+    #     cos_matrix = cos_matrix/num_of_coses
                     
-        #print(cos_matrix)
+    #     #print(cos_matrix)
         
-        clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='precomputed', linkage='complete').fit(1-cos_matrix)
-        # print('Original Copylist', copylist)
-        # print('Found clusters', clustering.labels_)
-        # print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
-        # print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
-        print('\n\nClustering score with running avg', adjusted_rand_score(clustering.labels_.tolist(), copylist))
-        self.debug_log['cluster'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
-        self.debug_log['cluster_labels'].append((iter, 'cluster_grads', 'Original cluster labels', copylist, 'Found cluster labels', clustering.labels_))
+    #     clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='precomputed', linkage='complete').fit(1-cos_matrix)
+    #     # print('Original Copylist', copylist)
+    #     # print('Found clusters', clustering.labels_)
+    #     # print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
+    #     # print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+    #     print('\n\nClustering score with running avg', adjusted_rand_score(clustering.labels_.tolist(), copylist))
+    #     self.debug_log['cluster'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
+    #     self.debug_log['cluster_labels'].append((iter, 'cluster_grads', 'Original cluster labels', copylist, 'Found cluster labels', clustering.labels_))
         
 
-        correct_c=[]
-        wrong_c=[]
-        for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
-            mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
-            mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
-            # print(mals_benign_brothers, mals_benign_brothers_clusters)
-            benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
+    #     correct_c=[]
+    #     wrong_c=[]
+    #     for id, mal in enumerate(range(num_of_workers-num_of_mal_workers, num_of_workers)):
+    #         mals_benign_brothers = np.where(np.array(copylist)==copylist[mal])
+    #         mals_benign_brothers_clusters = [clustering.labels_[iid] for iid in mals_benign_brothers[0]]
+    #         # print(mals_benign_brothers, mals_benign_brothers_clusters)
+    #         benign_group_num=stats.mode(mals_benign_brothers_clusters)[0]
 
-            if clustering.labels_[mal]==benign_group_num:
-                correct_c.append(copylist[mal])
-            else:
-                wrong_c.append(copylist[mal])
+    #         if clustering.labels_[mal]==benign_group_num:
+    #             correct_c.append(copylist[mal])
+    #         else:
+    #             wrong_c.append(copylist[mal])
 
-        print('correct_c ', len(correct_c), correct_c)
-        print('wrong_c ', len(wrong_c), wrong_c)
-        self.debug_log['cluster_mal'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
+    #     print('correct_c ', len(correct_c), correct_c)
+    #     print('wrong_c ', len(wrong_c), wrong_c)
+    #     self.debug_log['cluster_mal'].append((iter, 'correct_c', correct_c, 'wrong_c', wrong_c))
         
-        '''
-        X = [np.array(net.grad_params) for net in self.benign_nets]
-        X= np.array(X)
-        copylist2=copylist[:self.num_of_benign_nets]
-        clustering = AgglomerativeClustering(n_clusters=len(set(copylist2)), affinity='cosine', linkage='complete').fit(X)
-        print('Original Copylist', copylist2)
-        print('Found clusters', clustering.labels_)
-        print('Original groups', [np.argwhere(np.array(copylist2)==i).flatten() for i in range(num_of_distributions)])
-        print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
-        print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist2))
-        '''
+    #     '''
+    #     X = [np.array(net.grad_params) for net in self.benign_nets]
+    #     X= np.array(X)
+    #     copylist2=copylist[:self.num_of_benign_nets]
+    #     clustering = AgglomerativeClustering(n_clusters=len(set(copylist2)), affinity='cosine', linkage='complete').fit(X)
+    #     print('Original Copylist', copylist2)
+    #     print('Found clusters', clustering.labels_)
+    #     print('Original groups', [np.argwhere(np.array(copylist2)==i).flatten() for i in range(num_of_distributions)])
+    #     print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+    #     print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist2))
+    #     '''
         
-        return coses, clustering.labels_
+    #     return coses, clustering.labels_
 
     def new_aggregation(self, iter=-1, tqdm_disable=False):
         if iter<self.validation_starts_at_iter:
@@ -536,6 +542,12 @@ class CustomFL:
         if iter==0:
             _, clusters = self.cluster_grads(iter, clustering_params='lsrs')
             self.clusters = clusters
+            all_group_nos = []
+            for i, cluster in enumerate(self.clusters):
+                if len(clusters) > 2:
+                    all_group_nos.append(i)
+            self.all_group_nos = all_group_nos
+
             print('Spectral clustering output')
             self.print_clusters(clusters)
         if iter<0:
@@ -586,7 +598,7 @@ class CustomFL:
             # agglomerative clustering based validation
 
             #get agglomerative clusters
-            if iter==0 or np.random.random_sample() < 0.2:
+            if iter<2 or np.random.random_sample() < np.min([0.1, np.exp(-iter*0.1)/(1. + np.exp(-iter*0.1))]):
                 _, self.clusters_agg = self.cluster_grads(iter, clustering_method='Agglomerative')
             clusters_agg = self.clusters_agg
             self.print_clusters(clusters_agg)
@@ -596,9 +608,12 @@ class CustomFL:
             val_client_indice_tuples=[]
             for i, val_cluster in enumerate(self.clusters):
                 val_trust_scores = [self.validator_trust_scores[vid] for vid in val_cluster]
-                val_trust_scores = np.array(val_trust_scores)/sum(val_trust_scores)
-                if len(val_cluster) > 2:
+                # if np.max(val_trust_scores) < 0.01:
+                #     for vid in val_cluster:
+                #         self.validator_trust_scores[vid] = 1.
+                if len(val_cluster) > 2 and np.max(val_trust_scores) > 0.05:
                     # v1, v2 = random.sample(val_cluster, 2)
+                    val_trust_scores = np.array(val_trust_scores)/sum(val_trust_scores)
                     v1, v2 = np.random.choice(val_cluster, 2, replace=False, p=val_trust_scores)
                     val_client_indice_tuples.append((i, v1))
                     val_client_indice_tuples.append((i, v2))
@@ -618,8 +633,11 @@ class CustomFL:
                     if val_idx<self.num_of_benign_nets or aa0==0:
                         _, _, val_test_loader = train_loaders[iter][val_idx]
                     else:
-                        _, _, val_test_loader = train_loaders[iter][self.num_of_benign_nets]
+                        first_target_group_mal_index = np.where(np.array(copylist)==target_class)[0][aa0]
+                        _, _, val_test_loader = train_loaders[iter][first_target_group_mal_index]
                     val_acc, val_acc_by_class = validation_test(cluster_avg_net, val_test_loader, is_poisonous=(iter>=self.poison_starts_at_iter) and (val_idx>self.num_of_benign_nets))
+                    # if val_idx>=self.num_of_benign_nets:
+                    #     print(val_acc, val_acc_by_class)
                     # print(idx, val_idx, cluster_dict[group_no], val_acc)
                     # val_acc_mat[idx][iidx] = val_acc
                     # if idx in cluster_dict[group_no]:
@@ -688,12 +706,12 @@ class CustomFL:
             total_acc = 0.
             for grp_no in all_grp_nos:
                 for (val_acc, val_acc_report) in val_score_by_group_dict[grp_no]:
-                    total_acc += val_acc_report[0]
+                    total_acc += val_acc_report[target_class]
 
             new_val_score_by_group_dict = {}
             for grp_no in all_grp_nos:
-                val_acc_0 = val_score_by_group_dict[grp_no][0][1][0]
-                val_acc_1 = val_score_by_group_dict[grp_no][1][1][0]
+                val_acc_0 = val_score_by_group_dict[grp_no][0][1][target_class]
+                val_acc_1 = val_score_by_group_dict[grp_no][1][1][target_class]
                 total_acc_excluding = total_acc - val_acc_0 - val_acc_1
                 mean_acc_excluding = total_acc_excluding/(2*(len(all_grp_nos)-1))
                 if min(abs(mean_acc_excluding-val_acc_0),abs(mean_acc_excluding-val_acc_1))>40.:
@@ -716,6 +734,9 @@ class CustomFL:
                         validator = validators[grp_no][0]
                         self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
                     new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][1][0]
+            for grp_no in self.all_group_nos:
+                if grp_no not in new_val_score_by_group_dict.keys():
+                    new_val_score_by_group_dict[grp_no] = -1
             val_score_by_group_dict = new_val_score_by_group_dict
                             
             all_val_score_by_group_dict.append(val_score_by_group_dict)
@@ -745,7 +766,7 @@ class CustomFL:
                 if prev_val_score < 50.:
                     prev_val_grp_no = self.all_val_score_min_grp[client_id]
                     current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
-                    if current_val_score_on_that_group < 50:
+                    if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
                         all_val_score[client_id] = prev_val_score/2
                         all_val_score_min_grp[client_id] = prev_val_grp_no
             self.all_val_score = all_val_score
@@ -947,13 +968,16 @@ class CustomFL:
             print(f'iteration {iter} passed: time elapsed - {elapsed_time}\n')
 
             self.save_log(iter)
-            self.save_global_model(iter)
+            if save_global_model:
+                self.save_global_model(iter)
 
             if elapsed_time+first_iter_time > max_exec_min:
                 print('Maximum time limit exceeded. Quitting')
                 break
             
     def save_log(self, iter):
+        if iter != 0:
+            os.remove(f'output/{output_filename}/logs/{output_filename}_log_at_iter_{iter-1}.txt'.replace(':', '-'))
         with open(f'output/{output_filename}/logs/{output_filename}_log_at_iter_{iter}.txt'.replace(':', '-'), 'wb') as f:
             pickle.dump(self.debug_log, f)
 

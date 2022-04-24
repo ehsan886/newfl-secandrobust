@@ -49,7 +49,7 @@ def train(network, optimizer, epoch):
 def train_net(network, optimizer, trainloader, epoch, poisonNow=False, print_flag=False, tqdm_disable=True, attack_type='backdoor'):
 	for batch_idx, (data, target) in enumerate(tqdm(trainloader, disable=tqdm_disable)):
 		if poisonNow:
-			data, target, poison_num = get_poison_batch_special_label_flip((data, target))
+			data, target, poison_num = get_poison_batch_special_label_flip((data, target), target_class=target_class)
 		else:
 			data, target = get_batch((data, target))
 		optimizer.zero_grad()

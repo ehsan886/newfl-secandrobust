@@ -38,6 +38,7 @@ output_filename = args.output_filename
 dataset_name = args.dataset_name
 evasion_type = args.evasion_type
 iterative_k = int(args.iterative_k)
+save_global_model = False
 save_local_models_opt = int(args.save_local_models_opt)
 
 begin_time = datetime.datetime.now()
@@ -67,6 +68,7 @@ if flt_aggr:
     num_of_workers+=1
 num_of_mal_workers=int(args.num_of_mal_workers)
 n_iter=int(args.n_iter)
+# n_iter = 250
 n_epochs=1
 poison_starts_at_iter=int(args.poison_starts_at_iter)
 # poison_starts_at_iter=12
@@ -132,6 +134,16 @@ else:
     train_dataset = datasets.FashionMNIST('', train=True, download=True,
                                 transform=transform)
     test_dataset = datasets.FashionMNIST('', train=False, transform=transform)
+
+train_dataset.targets[train_dataset.targets==0] = 10
+train_dataset.targets[train_dataset.targets==target_class] = 0
+train_dataset.targets[train_dataset.targets==10] = target_class
+
+test_dataset.targets[test_dataset.targets==0] = 10
+test_dataset.targets[test_dataset.targets==target_class] = 0
+test_dataset.targets[test_dataset.targets==10] = target_class
+
+target_class = 0
 
 test_loader = torch.utils.data.DataLoader(
   test_dataset,
@@ -381,28 +393,36 @@ def assign_data_nonuniform(train_data, bias, ctx, num_labels=10, num_workers=100
     server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label = assign_data(train_data, bias, ctx, num_labels, 10, server_pc, p, server_case2_cls, dataset, seed, flt_aggr)
     ewd = [[] for _ in range(num_workers)]
     ewl = [[] for _ in range(num_workers)]
-    group_sizes = [np.random.randint(5, 16) for i in range(9)]
-    group_sizes.append(num_workers-sum(group_sizes))
+    # group_sizes = [np.random.randint(5, 16) for i in range(9)]
+    # group_sizes.append(num_workers-sum(group_sizes))
+    # if group_sizes[-1] < 5 or group_sizes[-1] > 15:
+    #     avg_last_2 = (group_sizes[-1] + group_sizes[-2])/2
+        
+    copylist = []
+    for i, group_size in enumerate(group_sizes):
+        for _ in range(group_size):
+            copylist.append(i)
 
     for i in range(len(each_worker_data)):
         group_size = group_sizes[i]
+        group_frac = 1./group_size
         label_data = np.array(each_worker_label[i])
         i_indices = np.where(label_data==i)[0].tolist()
         not_i_indices = np.where(label_data!=i)[0].tolist()
         split_map_for_i = []
         split_map_for_i.append(0)
         split_map_for_not_i = [0]
-        for ii in range(1, 10):
-            split_ratio_for_i = np.random.normal(ii*0.1, 0.015)
-            split_ratio_for_not_i = ii*0.2 - split_ratio_for_i
+        for ii in range(1, group_size):
+            split_ratio_for_i = np.random.normal(ii*group_frac, group_frac/10)
+            split_ratio_for_not_i = ii*group_frac*2 - split_ratio_for_i
             split_map_for_i.append(int(split_ratio_for_i*len(i_indices)))
             split_map_for_not_i.append(int(split_ratio_for_not_i*len(not_i_indices)))
         split_map_for_i.append(len(i_indices))
         split_map_for_not_i.append(len(not_i_indices))
-        i_indices_list = [i_indices[split_map_for_i[ii]:split_map_for_i[ii+1]] for ii in range(10)]
-        not_i_indices_list = [not_i_indices[split_map_for_not_i[ii]:split_map_for_not_i[ii+1]] for ii in range(10)]
+        i_indices_list = [i_indices[split_map_for_i[ii]:split_map_for_i[ii+1]] for ii in range(group_size)]
+        not_i_indices_list = [not_i_indices[split_map_for_not_i[ii]:split_map_for_not_i[ii+1]] for ii in range(group_size)]
         indice_map = [0]*len(each_worker_data[i])
-        for ii in range(10):
+        for ii in range(group_size):
             for iii in i_indices_list[ii]:
                 indice_map[iii] = ii 
             for iii in not_i_indices_list[ii]:
@@ -410,8 +430,8 @@ def assign_data_nonuniform(train_data, bias, ctx, num_labels=10, num_workers=100
         size_of_group = int(len(each_worker_data[i])/10)
         stop_val = 10 * size_of_group
         for idx in range(len(each_worker_data[i])):
-            ewd[i*10 + indice_map[idx]].append(each_worker_data[i][idx])
-            ewl[i*10 + indice_map[idx]].append(each_worker_label[i][idx])
+            ewd[sum(group_sizes[:i]) + indice_map[idx]].append(each_worker_data[i][idx])
+            ewl[sum(group_sizes[:i]) + indice_map[idx]].append(each_worker_label[i][idx])
     return server_data, server_label, ewd, ewl, server_add_data, server_add_label
 
 
@@ -424,15 +444,25 @@ else:
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
 
+group_sizes = [10, 10, 5, 15, 5, 15, 5, 15, 5, 15]
+group_sizes = [10 for _ in range(10)]
+copylist = []
+for i, group_size in enumerate(group_sizes):
+    for _ in range(group_size):
+        copylist.append(i)
+if flt_aggr:
+    copylist.append(copylist[-1]+1)
+
 sd, sl, ewd, ewl, sad, sal = assign_data_nonuniform(train_dataset, bias, None, p=server_pct, flt_aggr=flt_aggr)
 
 if flt_aggr:
     ewd.append(sd)
     ewl.append(sl)
 
-group_0_list=np.arange(10)
+group_0_list=np.arange(target_class*10, (target_class+1)*10)
+other_group_list=np.union1d(np.arange(0, group_0_list[0]), np.arange(group_0_list[-1]+1, 100))
 np.random.shuffle(group_0_list)
-other_group_list=np.arange(10, 99)
+print(other_group_list)
 np.random.shuffle(other_group_list)
 # print(group_0_list[:aa0])
 mal_indices = np.sort(np.array(group_0_list[:aa0].tolist() + other_group_list[:num_of_mal_workers-aa0].tolist()))
@@ -466,6 +496,8 @@ if flt_aggr and server_priv_att_iter!=-1:
 # 	print(mals_benign_brothers, mals_benign_brothers_clusters)
 # 	print(stats.mode(mals_benign_brothers_clusters)[0])
 
+first_target_group_mal_index = np.where(np.array(copylist)==target_class)[0][aa0]
+print(first_target_group_mal_index)
 
 train_loaders = []
 for id_worker in range(len(ewd)):

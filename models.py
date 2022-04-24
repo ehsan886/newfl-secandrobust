@@ -100,7 +100,39 @@ class FLNet(SimpleNet):
         out = self.mnistnet1(x)
         return out
 
+class CNN_new(SimpleNet):
+    def __init__(self, name=None, created_time=None,num_of_classes = 10,network_id=-1, net_id=-1, is_malicious=False):
+        super(CNN, self).__init__(f'{name}_Simple', created_time, is_malicious=is_malicious, net_id=net_id)
 
+        self.network_id=network_id
+
+        self.conv1 = nn.Sequential(         
+            nn.Conv2d(
+                in_channels=1,              
+                out_channels=16,            
+                kernel_size=3,              
+                stride=2,                   
+                padding=2,                  
+            ),                              
+            nn.ReLU(),                      
+            nn.MaxPool2d(kernel_size=2),    
+        )
+        self.conv2 = nn.Sequential(         
+            nn.Conv2d(16, 32, 3, 2, 2),     
+            nn.ReLU(),                      
+            nn.MaxPool2d(2),                
+        )
+        # fully connected layer, output 10 classes
+        self.dense = nn.Linear(32 * 4, 100)
+        self.out = nn.Linear(100, 10)
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        # flatten the output of conv2 to (batch_size, 32 * 7 * 7)
+        x = x.view(x.size(0), -1)       
+        x = self.dense(x)
+        output = self.out(x)
+        return output    # return x for visualization
 
 class CNN(SimpleNet):
     def __init__(self, name=None, created_time=None,num_of_classes = 10,network_id=-1, net_id=-1, is_malicious=False):

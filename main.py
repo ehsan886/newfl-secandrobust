@@ -21,11 +21,13 @@ if __name__ == '__main__':
 	)
 
 	group_report = [{} for _ in range(10)]
+	if flt_aggr:
+		group_report.append({})
 	for id in range(len(train_loaders[0])):
 		(_, _, train_loader) = train_loaders[0][id]
 		lsr = get_label_skew_ratios(train_loader.dataset)
 		fl.debug_log['label_skew_ratio'].append((id, lsr))
-		group_report[copylist[id]][id] = lsr[copylist[id]]
+		group_report[copylist[id]][id] = lsr[copylist[id]%10]
 
 	fl.debug_log['label_skew_group_report'] = group_report
 	for i in range(10):
