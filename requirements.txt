@@ -223,7 +223,6 @@ pandocfilters==1.5.0
 panel==0.12.1
 param==1.12.0
 parso==0.8.3
-pathlib==1.0.1
 patsy==0.5.2
 pep517==0.12.0
 pexpect==4.8.0
