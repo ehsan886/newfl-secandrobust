@@ -11,6 +11,8 @@ from collections import defaultdict
 import argparse
 import datetime
 
+import scenario_dict
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--attacker_at_0', dest='aa0', default=0)
 parser.add_argument('--server_pct', dest='server_pct', default=0.1)
@@ -29,6 +31,9 @@ parser.add_argument('--iterative_k', dest='iterative_k', default=10)
 parser.add_argument('--save_local_models_opt', dest='save_local_models_opt', default=0)
 parser.add_argument('--evasion_type', dest='evasion_type', default=None)
 
+parser.add_argument('--target_class', dest='target_class', default=0)
+parser.add_argument('--scenario_dict_on', dest='scenario_dict_on', default=0)
+
 args = parser.parse_args()
 
 aa0 = int(args.aa0)
@@ -40,6 +45,21 @@ evasion_type = args.evasion_type
 iterative_k = int(args.iterative_k)
 save_global_model = False
 save_local_models_opt = int(args.save_local_models_opt)
+target_class = int(args.target_class)
+num_of_mal_workers=int(args.num_of_mal_workers)
+nuiid = True
+scenario_dict_on = int(args.scenario_dict_on)
+
+if scenario_dict_on:
+    configs = scenario_dict[output_filename]
+    num_of_mal_workers = configs[0]
+    aa0 = configs[1]
+    target_class = configs[2]
+    dataset_name = configs[3]
+    if configs[4] == 'uniform':
+        nuiid = False
+    evasion_type = configs[5]
+
 
 begin_time = datetime.datetime.now()
 
@@ -66,7 +86,6 @@ if clustering_on:
 num_of_workers=100
 if flt_aggr:
     num_of_workers+=1
-num_of_mal_workers=int(args.num_of_mal_workers)
 n_iter=int(args.n_iter)
 # n_iter = 250
 n_epochs=1
@@ -79,7 +98,7 @@ attack_type='label_flip'
 scale_up=False
 minimizeDist=False
 
-target_class=0
+# target_class=0
 
 iid = False
 bias = float(args.bias)
@@ -444,8 +463,10 @@ else:
 # mal_indices=[19, 28, 37, 46, 55, 64, 73, 82, 91]
 # mal_indices=[18, 19, 27, 28, 36, 37, 45, 46, 54, 55, 63, 64, 72, 73, 81, 82, 90, 91]
 
-group_sizes = [10, 10, 5, 15, 5, 15, 5, 15, 5, 15]
-group_sizes = [10 for _ in range(10)]
+if nuiid:
+    group_sizes = [10, 10, 5, 15, 5, 15, 5, 15, 5, 15]
+else:
+    group_sizes = [10 for _ in range(10)]
 copylist = []
 for i, group_size in enumerate(group_sizes):
     for _ in range(group_size):
